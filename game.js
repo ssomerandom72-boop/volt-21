@@ -211,6 +211,84 @@ deviceGroup.add(deviceLight);
 deviceGroup.position.copy(DEVICE_POS);
 scene.add(deviceGroup);
 
+// ── SIDE ELECTRODE STANDS ──
+const standMat  = new THREE.MeshStandardMaterial({ color: 0x0e0e0e, metalness: 0.88, roughness: 0.22 });
+const padMat    = new THREE.MeshStandardMaterial({ color: 0x1a0025, metalness: 0.7, roughness: 0.4, emissive: 0x330055, emissiveIntensity: 0.7 });
+const contactMat = new THREE.MeshStandardMaterial({ color: 0xaa00ff, emissive: 0xaa00ff, emissiveIntensity: 2.2, roughness: 0.1 });
+const wireMat   = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.85, metalness: 0.3 });
+
+function buildElectrodeStand(x, z) {
+    const g = new THREE.Group();
+    const inward = x < 0 ? 1 : -1; // arm points toward table center
+
+    // Clamp base on table edge
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.07, 0.18), standMat),
+        { position: new THREE.Vector3(0, 0.095, 0) }));
+
+    // Vertical rod
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 1.05, 8), standMat);
+    rod.position.set(0, 0.645, 0);
+    g.add(rod);
+
+    // Horizontal arm
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.55, 6), standMat);
+    arm.rotation.z = Math.PI / 2;
+    arm.position.set(inward * 0.275, 1.15, 0);
+    g.add(arm);
+
+    // Electrode disc pad
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.055, 16), padMat);
+    pad.rotation.z = Math.PI / 2;
+    pad.position.set(inward * 0.55, 1.15, 0);
+    g.add(pad);
+
+    // Glowing contact point
+    const contact = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), contactMat);
+    contact.position.set(inward * 0.578, 1.15, 0);
+    g.add(contact);
+
+    // Screws / detail rings on pad
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.006, 6, 12), standMat);
+    ring.rotation.y = Math.PI / 2;
+    ring.position.set(inward * 0.545, 1.15, 0);
+    g.add(ring);
+
+    g.position.set(x, 0.06, z);
+    return g;
+}
+
+// 4 electrode stands — one per quadrant
+const standConfigs = [[-3.6, 1.6], [3.6, 1.6], [-3.6, -1.6], [3.6, -1.6]];
+for (const [x, z] of standConfigs) scene.add(buildElectrodeStand(x, z));
+
+// ── WIRES connecting electrodes to device ──
+function makeWire(from, to) {
+    const sag = -0.38;
+    const mid1 = new THREE.Vector3(
+        from.x * 0.65 + to.x * 0.35,
+        Math.min(from.y, to.y) + sag,
+        from.z * 0.65 + to.z * 0.35
+    );
+    const mid2 = new THREE.Vector3(
+        from.x * 0.35 + to.x * 0.65,
+        Math.min(from.y, to.y) + sag,
+        from.z * 0.35 + to.z * 0.65
+    );
+    const curve = new THREE.CatmullRomCurve3([from, mid1, mid2, to]);
+    const geo   = new THREE.TubeGeometry(curve, 22, 0.011, 5, false);
+    return new THREE.Mesh(geo, wireMat);
+}
+
+// contact point x offset (inward * 0.578 from stand x, at y=1.21 world)
+const devTop = new THREE.Vector3(0, 0.82, 0);
+const wireEndpoints = [
+    { from: new THREE.Vector3(-3.6 + 0.578, 1.21, 1.6),  to: devTop.clone().add(new THREE.Vector3(-0.08, 0, 0.08)) },
+    { from: new THREE.Vector3( 3.6 - 0.578, 1.21, 1.6),  to: devTop.clone().add(new THREE.Vector3( 0.08, 0, 0.08)) },
+    { from: new THREE.Vector3(-3.6 + 0.578, 1.21, -1.6), to: devTop.clone().add(new THREE.Vector3(-0.08, 0,-0.08)) },
+    { from: new THREE.Vector3( 3.6 - 0.578, 1.21, -1.6), to: devTop.clone().add(new THREE.Vector3( 0.08, 0,-0.08)) },
+];
+for (const { from, to } of wireEndpoints) scene.add(makeWire(from, to));
+
 let deviceTime = 0;
 function updateDevice(dt) {
     deviceTime += dt;
