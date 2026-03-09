@@ -215,7 +215,7 @@ scene.add(deviceGroup);
 const standMat  = new THREE.MeshStandardMaterial({ color: 0x0e0e0e, metalness: 0.88, roughness: 0.22 });
 const padMat    = new THREE.MeshStandardMaterial({ color: 0x1a0025, metalness: 0.7, roughness: 0.4, emissive: 0x330055, emissiveIntensity: 0.7 });
 const contactMat = new THREE.MeshStandardMaterial({ color: 0xaa00ff, emissive: 0xaa00ff, emissiveIntensity: 2.2, roughness: 0.1 });
-const wireMat   = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.85, metalness: 0.3 });
+const cableMat  = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.85, metalness: 0.3 });
 
 function buildElectrodeStand(x, z) {
     const g = new THREE.Group();
@@ -276,7 +276,7 @@ function makeWire(from, to) {
     );
     const curve = new THREE.CatmullRomCurve3([from, mid1, mid2, to]);
     const geo   = new THREE.TubeGeometry(curve, 22, 0.011, 5, false);
-    return new THREE.Mesh(geo, wireMat);
+    return new THREE.Mesh(geo, cableMat);
 }
 
 // contact point x offset (inward * 0.578 from stand x, at y=1.21 world)
