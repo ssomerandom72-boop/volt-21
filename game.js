@@ -492,15 +492,39 @@ function waitForAction(who, busted = false) {
     });
 }
 
-function waitForBluffResponse(who) {
+// Bluffer picks a value to claim
+function waitForClaim() {
+    return new Promise(resolve => {
+        ui.actionLabel.textContent = 'Claim your hand value:';
+        ui.drawRow.classList.add('hidden');
+        ui.bluffRow.innerHTML = '';
+        const claims = [15, 16, 17, 18, 19, 20, 21];
+        for (const val of claims) {
+            const btn = document.createElement('button');
+            btn.textContent = val === 21 ? '21 (BJ)' : String(val);
+            btn.style.padding = '10px 18px';
+            btn.onclick = () => {
+                ui.drawRow.classList.remove('hidden');
+                resetBluffRow();
+                resolve(val);
+            };
+            ui.bluffRow.appendChild(btn);
+        }
+        ui.bluffRow.classList.remove('hidden');
+        ui.actionArea.classList.remove('hidden');
+    });
+}
+
+// Opponent sees the claim and decides
+function waitForBluffResponse(who, claim) {
     return new Promise(resolve => {
         _actionResolve = null;
-        ui.actionLabel.textContent = `${state[who].name}: Call or Fold?`;
+        ui.actionLabel.textContent = `${state[who].name}: Opponent claims ${claim}. Call or fold?`;
         ui.drawRow.classList.add('hidden');
         ui.bluffRow.innerHTML = `
-            <button id="btn-call" class="danger">⚡ Call Bluff</button>
+            <button id="btn-call" class="danger">⚡ Call</button>
             <button id="btn-fold-bluff" class="safe">Fold</button>`;
-        document.getElementById('btn-call').onclick      = () => { resetBluffRow(); ui.drawRow.classList.remove('hidden'); resolve('call'); };
+        document.getElementById('btn-call').onclick       = () => { resetBluffRow(); ui.drawRow.classList.remove('hidden'); resolve('call'); };
         document.getElementById('btn-fold-bluff').onclick = () => { resetBluffRow(); ui.drawRow.classList.remove('hidden'); resolve('fold'); };
         ui.bluffRow.classList.remove('hidden');
         ui.actionArea.classList.remove('hidden');
@@ -565,27 +589,31 @@ async function localPlayerTurn(who) {
             playBluffSound();
             state.tension = Math.min(100, state.tension + 15);
             updateUI();
-            await showMessage(`${player.name} raises the stakes!`, 1400);
 
-            // Opponent responds
-            ui.turnBanner.textContent = `${opp.name} — Call the Bluff or Fold?`;
+            // Bluffer privately picks their claim — opponent looks away
+            const claim = await waitForClaim();
+            ui.actionArea.classList.add('hidden');
+            ui.handArea.classList.add('hidden');
+
+            // Show opponent their own hand + the claim
+            ui.turnBanner.textContent = `${opp.name} — Look now.`;
             ui.turnBanner.classList.remove('hidden');
-            await wait(1400);
+            await wait(1600);
             ui.turnBanner.classList.add('hidden');
             renderOppHand(opp.hand, true, '');
 
-            const response = await waitForBluffResponse(oppWho);
+            const response = await waitForBluffResponse(oppWho, claim);
             ui.actionArea.classList.add('hidden');
 
             if (response === 'fold') {
-                await showMessage(`${opp.name} folds — coward.`, 1600);
+                await showMessage(`${opp.name} folds.`, 1600);
                 const useDouble = consumeDoubleShock(who);
                 opp.lives = Math.max(0, opp.lives - (useDouble ? 2 : 1));
                 updateUI();
                 await doShock(oppWho, useDouble);
                 return { result: 'bluff-win', who };
             } else {
-                // Call — reveal and compare
+                // Called — reveal both hands and compare
                 playReveal();
                 renderHand(player.hand, true);
                 renderOppHand(opp.hand, true, '');
@@ -595,12 +623,12 @@ async function localPlayerTurn(who) {
                 const blufferWins = !isBust(player.hand) && (isBust(opp.hand) || pt >= ot);
 
                 if (blufferWins) {
-                    await showMessage(`${player.name}'s bluff holds! ${opp.name} pays!`, 2000);
+                    await showMessage(`${player.name} had it. ${opp.name} pays!`, 2000);
                     const useDouble = consumeDoubleShock(who);
                     await doShock(oppWho, useDouble);
                     return { result: 'bluff-win', who };
                 } else {
-                    await showMessage(`Bluff called! ${player.name} pays!`, 2000);
+                    await showMessage(`Bluff called correctly. ${player.name} pays!`, 2000);
                     const useDouble = consumeDoubleShock(oppWho);
                     await doShock(who, useDouble);
                     return { result: 'bluff-loss', who };
@@ -758,7 +786,8 @@ function applyNetState(s) {
 
 function handleGuestMessage(data) {
     if (data.type === 'action' && online._resolvers.action) {
-        online._resolvers.action(data.value);
+        // Pass the full data object so host can read .claim for bluffs
+        online._resolvers.action(data.claim !== undefined ? data : data.value);
         delete online._resolvers.action;
     }
 }
@@ -787,10 +816,9 @@ function handleHostMessage(data) {
             const opp = data.action;
             if (opp === 'hit') ui.oppStatus.textContent = 'Opponent hits...';
             if (opp === 'stand') ui.oppStatus.textContent = 'Opponent stands.';
-            if (opp === 'bluff') { ui.oppStatus.textContent = '⚡ OPPONENT BLUFFS!'; playBluffSound(); }
             break;
         case 'waitBluffCall':
-            startGuestBluffCallUI();
+            startGuestBluffCallUI(data.claim);
             break;
         case 'gameOver':
             applyNetState(data.s);
@@ -807,15 +835,21 @@ function startGuestTurnUI(hand) {
     resetBluffRow();
     ui.actionArea.classList.remove('hidden');
 
-    const send = (v) => { ui.actionArea.classList.add('hidden'); sendToHost({ type: 'action', value: v }); };
+    const send = (v, extra = {}) => { ui.actionArea.classList.add('hidden'); sendToHost({ type: 'action', value: v, ...extra }); };
     document.getElementById('btn-hit').onclick   = () => send('hit');
     document.getElementById('btn-stand').onclick = () => send('stand');
-    document.getElementById('btn-bluff').onclick = () => send('bluff');
     document.getElementById('btn-fold').onclick  = () => send('fold');
+    document.getElementById('btn-bluff').onclick = async () => {
+        ui.actionArea.classList.add('hidden');
+        const busted = isBust(state.p2.hand);
+        const claim  = await waitForClaim();
+        ui.actionArea.classList.add('hidden');
+        sendToHost({ type: 'action', value: 'bluff', claim });
+    };
 }
 
-function startGuestBluffCallUI() {
-    waitForBluffResponse('p2').then(r => {
+function startGuestBluffCallUI(claim) {
+    waitForBluffResponse('p2', claim).then(r => {
         ui.actionArea.classList.add('hidden');
         sendToHost({ type: 'action', value: r });
     });
@@ -855,15 +889,16 @@ async function onlineHostPlayerTurn() {
         } else if (action === 'bluff') {
             playBluffSound();
             state.tension = Math.min(100, state.tension + 15);
-            sendToGuest({ type: 'oppAction', action: 'bluff' });
-            sendToGuest({ type: 'waitBluffCall' });
-            await showMessage('You bluff. Waiting...', 800);
+            // Host picks claim privately — guest doesn't know yet
+            const claim = await waitForClaim();
+            ui.actionArea.classList.add('hidden');
+            sendToGuest({ type: 'waitBluffCall', claim });
 
             const response = await waitGuest();
             broadcastState();
 
             if (response === 'fold') {
-                await showMessage(`${state.p2.name} folds — coward.`, 1600);
+                await showMessage(`${state.p2.name} folds.`, 1600);
                 sendToGuest({ type: 'message', text: 'You folded.', duration: 1400 });
                 const useDouble = consumeDoubleShock('p1');
                 state.p2.lives = Math.max(0, state.p2.lives - (useDouble ? 2 : 1));
@@ -875,18 +910,18 @@ async function onlineHostPlayerTurn() {
                 sendToGuest({ type: 'reveal', hostHand: state.p1.hand, guestHand: state.p2.hand });
                 playReveal();
                 renderOppHand(state.p2.hand, true, '');
-                await showMessage('Cards revealed.', 1200);
+                await showMessage('Cards on the table.', 1200);
                 const pt = handTotal(state.p1.hand), gt = handTotal(state.p2.hand);
                 const blufferWins = !isBust(state.p1.hand) && (isBust(state.p2.hand) || pt >= gt);
                 if (blufferWins) {
-                    await showMessage(`Your bluff holds! ${state.p2.name} pays!`, 2000);
+                    await showMessage(`You had it. ${state.p2.name} pays!`, 2000);
                     const useDouble = consumeDoubleShock('p1');
                     broadcastState();
                     sendToGuest({ type: 'shock', who: 'p2', double: useDouble });
                     await doShock('p2', useDouble);
                     return { result: 'bluff-win', who: 'p1' };
                 } else {
-                    await showMessage(`Bluff called! You pay!`, 2000);
+                    await showMessage(`Bluff called correctly. You pay!`, 2000);
                     const useDouble = consumeDoubleShock('p2');
                     broadcastState();
                     sendToGuest({ type: 'shock', who: 'p1', double: useDouble });
@@ -915,7 +950,9 @@ async function onlineGuestPlayerTurn() {
     });
 
     while (true) {
-        const action = await waitGuest();
+        const raw    = await waitGuest();
+        const action = typeof raw === 'object' ? raw.value : raw;
+        const actionObj = typeof raw === 'object' ? raw : { value: raw };
 
         if (action === 'hit') {
             state.p2.hand.push(drawCard());
@@ -937,15 +974,18 @@ async function onlineGuestPlayerTurn() {
         } else if (action === 'bluff') {
             playBluffSound();
             state.tension = Math.min(100, state.tension + 15);
-            await showMessage(`${state.p2.name} bluffs!`, 1400);
+            // Guest sent their bluff — host picks claim to show guest
+            // (guest already chose claim on their end via startGuestTurnUI sending action='bluff'
+            //  but we need the claim value — guest sends it along)
+            const guestClaim = actionObj.claim || 20;
             sendToGuest({ type: 'message', text: 'You bluffed! Waiting...', duration: 1000 });
 
-            const response = await waitForBluffResponse('p1');
+            const response = await waitForBluffResponse('p1', guestClaim);
             ui.actionArea.classList.add('hidden');
             sendToGuest({ type: 'message', text: response === 'call' ? 'Called!' : 'Folded!', duration: 1000 });
 
             if (response === 'fold') {
-                await showMessage(`You fold. ${state.p2.name} wins this one.`, 1600);
+                await showMessage(`You fold.`, 1600);
                 const useDouble = consumeDoubleShock('p2');
                 state.p1.lives = Math.max(0, state.p1.lives - (useDouble ? 2 : 1));
                 broadcastState();
@@ -956,18 +996,18 @@ async function onlineGuestPlayerTurn() {
                 sendToGuest({ type: 'reveal', hostHand: state.p1.hand, guestHand: state.p2.hand });
                 playReveal();
                 renderOppHand(state.p2.hand, true, '');
-                await showMessage('Cards revealed.', 1200);
+                await showMessage('Cards on the table.', 1200);
                 const pt = handTotal(state.p1.hand), gt = handTotal(state.p2.hand);
                 const blufferWins = !isBust(state.p2.hand) && (isBust(state.p1.hand) || gt >= pt);
                 if (blufferWins) {
-                    await showMessage(`${state.p2.name}'s bluff holds! You pay!`, 2000);
+                    await showMessage(`${state.p2.name} had it. You pay!`, 2000);
                     const useDouble = consumeDoubleShock('p2');
                     broadcastState();
                     sendToGuest({ type: 'shock', who: 'p1', double: useDouble });
                     await doShock('p1', useDouble);
                     return { result: 'bluff-win', who: 'p2' };
                 } else {
-                    await showMessage(`Bluff called! ${state.p2.name} pays!`, 2000);
+                    await showMessage(`Bluff called correctly. ${state.p2.name} pays!`, 2000);
                     const useDouble = consumeDoubleShock('p1');
                     broadcastState();
                     sendToGuest({ type: 'shock', who: 'p2', double: useDouble });
