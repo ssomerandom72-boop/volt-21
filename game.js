@@ -478,10 +478,14 @@ function consumeDoubleShock(who) {
 // ── ACTION WAITING ──
 let _actionResolve = null;
 
-function waitForAction(who) {
+function waitForAction(who, busted = false) {
     return new Promise(resolve => {
         _actionResolve = resolve;
-        ui.actionLabel.textContent = `${state[who].name}'s Turn`;
+        ui.actionLabel.textContent = busted
+            ? `${state[who].name} — BUSTED. Bluff or fold?`
+            : `${state[who].name}'s Turn`;
+        document.getElementById('btn-hit').disabled   = busted;
+        document.getElementById('btn-stand').disabled = busted;
         ui.drawRow.classList.remove('hidden');
         resetBluffRow();
         ui.actionArea.classList.remove('hidden');
@@ -538,15 +542,12 @@ async function localPlayerTurn(who) {
     renderOppHand(opp.hand, false, '');
 
     while (true) {
-        if (isBust(player.hand)) {
-            await showMessage(`${player.name} busts!`, 1400);
-            ui.actionArea.classList.add('hidden');
-            return { result: 'bust', who };
-        }
-
-        const action = await waitForAction(who);
+        const busted = isBust(player.hand);
+        const action = await waitForAction(who, busted);
         initAudio();
         ui.actionArea.classList.add('hidden');
+        document.getElementById('btn-hit').disabled   = false;
+        document.getElementById('btn-stand').disabled = false;
 
         if (action === 'hit') {
             player.hand.push(drawCard());
@@ -554,6 +555,10 @@ async function localPlayerTurn(who) {
             renderHand(player.hand, true);
 
         } else if (action === 'stand') {
+            if (busted) {
+                await showMessage(`${player.name} busts!`, 1400);
+                return { result: 'bust', who };
+            }
             return { result: 'stand', who };
 
         } else if (action === 'bluff') {
@@ -826,13 +831,12 @@ async function onlineHostPlayerTurn() {
     sendToGuest({ type: 'message', text: "Opponent's turn...", duration: 500 });
 
     while (true) {
-        if (isBust(state.p1.hand)) {
-            await showMessage('You bust!', 1400);
-            return { result: 'bust', who: 'p1' };
-        }
-        const action = await waitForAction('p1');
+        const busted = isBust(state.p1.hand);
+        const action = await waitForAction('p1', busted);
         initAudio();
         ui.actionArea.classList.add('hidden');
+        document.getElementById('btn-hit').disabled   = false;
+        document.getElementById('btn-stand').disabled = false;
 
         if (action === 'hit') {
             state.p1.hand.push(drawCard());
@@ -841,6 +845,10 @@ async function onlineHostPlayerTurn() {
             sendToGuest({ type: 'oppAction', action: 'hit' });
 
         } else if (action === 'stand') {
+            if (busted) {
+                await showMessage('You bust!', 1400);
+                return { result: 'bust', who: 'p1' };
+            }
             sendToGuest({ type: 'oppAction', action: 'stand' });
             return { result: 'stand', who: 'p1' };
 
