@@ -2,56 +2,502 @@
 //  VOLTAGE 21 — Survival Horror Blackjack
 // ═══════════════════════════════════════════════
 
-// ── CANVAS BACKGROUND ──
-const bgCanvas = document.getElementById('bg-canvas');
-const bgCtx = bgCanvas.getContext('2d');
+// ── THREE.JS SCENE SETUP ──
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x02000a);
+renderer.domElement.style.position = 'fixed';
+renderer.domElement.style.top = '0';
+renderer.domElement.style.left = '0';
+renderer.domElement.style.zIndex = '1';
+document.body.insertBefore(renderer.domElement, document.body.firstChild);
 
-function resizeBg() {
-    bgCanvas.width  = window.innerWidth;
-    bgCanvas.height = window.innerHeight;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x02000a);
+scene.fog = new THREE.Fog(0x02000a, 10, 22);
+
+const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 7.5, 9.5);
+camera.lookAt(0, 0.5, -0.5);
+
+const camBase = new THREE.Vector3(0, 7.5, 9.5);
+
+window.addEventListener('resize', () => {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+});
+
+const clock = new THREE.Clock();
+
+// ── LIGHTING ──
+const ambientLight = new THREE.AmbientLight(0x110022, 0.6);
+scene.add(ambientLight);
+
+const mainLight = new THREE.PointLight(0xaa44ff, 5, 15);
+mainLight.position.set(0, 5.5, 0);
+mainLight.castShadow = true;
+mainLight.shadow.mapSize.width = 1024;
+mainLight.shadow.mapSize.height = 1024;
+scene.add(mainLight);
+
+const fillLeft = new THREE.PointLight(0x440088, 1.2, 12);
+fillLeft.position.set(-5, 3, 2);
+scene.add(fillLeft);
+
+const fillRight = new THREE.PointLight(0x440088, 1.2, 12);
+fillRight.position.set(5, 3, 2);
+scene.add(fillRight);
+
+// ── FLICKER STATE ──
+let flickerTimer = 0;
+let flickerInterval = 0.15;
+let flickerDipping = false;
+let flickerDipTimer = 0;
+let flickerDipDuration = 0;
+let flickerDipTarget = 5;
+const flickerBaseIntensity = 5;
+
+function updateFlicker(dt) {
+    flickerTimer += dt;
+    if (flickerDipping) {
+        flickerDipTimer += dt;
+        const t = Math.min(1, flickerDipTimer / flickerDipDuration);
+        const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+        if (flickerDipTimer < flickerDipDuration * 0.4) {
+            mainLight.intensity = flickerBaseIntensity + (flickerDipTarget - flickerBaseIntensity) * (flickerDipTimer / (flickerDipDuration * 0.4));
+        } else {
+            const recover = (flickerDipTimer - flickerDipDuration * 0.4) / (flickerDipDuration * 0.6);
+            mainLight.intensity = flickerDipTarget + (flickerBaseIntensity - flickerDipTarget) * Math.min(1, recover);
+        }
+        if (flickerDipTimer >= flickerDipDuration) {
+            flickerDipping = false;
+            mainLight.intensity = flickerBaseIntensity;
+        }
+    } else if (flickerTimer >= flickerInterval) {
+        flickerTimer = 0;
+        flickerInterval = 0.08 + Math.random() * 0.37;
+        mainLight.intensity = flickerBaseIntensity * (0.75 + Math.random() * 0.5);
+        if (Math.random() < 0.05) {
+            flickerDipping = true;
+            flickerDipTimer = 0;
+            flickerDipDuration = 0.3 + Math.random() * 0.4;
+            flickerDipTarget = 0.5 + Math.random() * 1.5;
+        }
+    }
 }
-resizeBg();
-window.addEventListener('resize', resizeBg);
 
-function drawBg() {
-    const w = bgCanvas.width, h = bgCanvas.height;
-    bgCtx.fillStyle = '#02000a';
-    bgCtx.fillRect(0, 0, w, h);
+// ── TABLE ──
+const tableMat = new THREE.MeshStandardMaterial({ color: 0x0a0012, roughness: 0.85, metalness: 0.1 });
+const tableGeo = new THREE.BoxGeometry(7.4, 0.12, 5.6);
+const tableMesh = new THREE.Mesh(tableGeo, tableMat);
+tableMesh.position.set(0, 0, 0);
+tableMesh.receiveShadow = true;
+scene.add(tableMesh);
 
-    const cx = w / 2, cy = h / 2;
-    const grad = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.55);
-    grad.addColorStop(0, 'rgba(12,0,22,0.9)');
-    grad.addColorStop(0.6, 'rgba(6,0,12,0.95)');
-    grad.addColorStop(1, 'rgba(0,0,0,1)');
-    bgCtx.fillStyle = grad;
-    bgCtx.fillRect(0, 0, w, h);
+// Table legs
+const legGeo = new THREE.CylinderGeometry(0.07, 0.07, 1.1, 8);
+const legMat = new THREE.MeshStandardMaterial({ color: 0x0d0018, roughness: 0.7, metalness: 0.4 });
+const legPositions = [[-3.3, -0.61, -2.5], [3.3, -0.61, -2.5], [-3.3, -0.61, 2.5], [3.3, -0.61, 2.5]];
+for (const [x, y, z] of legPositions) {
+    const leg = new THREE.Mesh(legGeo, legMat);
+    leg.position.set(x, y, z);
+    leg.castShadow = true;
+    scene.add(leg);
+}
 
-    bgCtx.beginPath();
-    bgCtx.ellipse(cx, cy, w * 0.42, h * 0.38, 0, 0, Math.PI * 2);
-    bgCtx.strokeStyle = 'rgba(80,0,120,0.18)';
-    bgCtx.lineWidth = 2;
-    bgCtx.stroke();
+// Purple emissive trim strips
+const trimMat = new THREE.MeshStandardMaterial({ color: 0x3a0055, emissive: 0x3a0055, emissiveIntensity: 0.8, roughness: 0.5, metalness: 0.3 });
+const trims = [
+    { geo: new THREE.BoxGeometry(7.42, 0.03, 0.03), pos: [0, 0.075, 2.8] },
+    { geo: new THREE.BoxGeometry(7.42, 0.03, 0.03), pos: [0, 0.075, -2.8] },
+    { geo: new THREE.BoxGeometry(0.03, 0.03, 5.62), pos: [3.71, 0.075, 0] },
+    { geo: new THREE.BoxGeometry(0.03, 0.03, 5.62), pos: [-3.71, 0.075, 0] },
+];
+for (const { geo, pos } of trims) {
+    const mesh = new THREE.Mesh(geo, trimMat);
+    mesh.position.set(...pos);
+    scene.add(mesh);
+}
 
-    bgCtx.strokeStyle = 'rgba(60,0,100,0.12)';
-    bgCtx.lineWidth = 1;
-    for (let i = 0; i < 4; i++) {
-        bgCtx.beginPath(); bgCtx.moveTo(40 + i * 8, 0); bgCtx.lineTo(40 + i * 8, h); bgCtx.stroke();
-        bgCtx.beginPath(); bgCtx.moveTo(w - 40 - i * 8, 0); bgCtx.lineTo(w - 40 - i * 8, h); bgCtx.stroke();
+// Center dividing line
+const divLineMat = new THREE.MeshStandardMaterial({ color: 0x220033, emissive: 0x220033, emissiveIntensity: 0.4 });
+const divLine = new THREE.Mesh(new THREE.BoxGeometry(7.0, 0.008, 0.025), divLineMat);
+divLine.position.set(0, 0.065, 0);
+scene.add(divLine);
+
+// ── ENVIRONMENT ──
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x050008, roughness: 1.0 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -1.18;
+floor.receiveShadow = true;
+scene.add(floor);
+
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x04000a, roughness: 1.0 });
+const backWall = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), wallMat);
+backWall.position.set(0, 5, -9);
+scene.add(backWall);
+
+// Hanging light fixture
+const fixtureGroup = new THREE.Group();
+
+const wireGeo = new THREE.CylinderGeometry(0.008, 0.008, 3.0, 6);
+const wireMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+const wire = new THREE.Mesh(wireGeo, wireMat);
+wire.position.set(0, 1.0, 0);
+fixtureGroup.add(wire);
+
+const shadeGeo = new THREE.CylinderGeometry(0.18, 0.28, 0.22, 12, 1, true);
+const shadeMat = new THREE.MeshStandardMaterial({ color: 0x0a000f, roughness: 0.6, metalness: 0.5, side: THREE.DoubleSide });
+const shade = new THREE.Mesh(shadeGeo, shadeMat);
+shade.position.set(0, -0.55, 0);
+fixtureGroup.add(shade);
+
+const bulbGeo = new THREE.SphereGeometry(0.07, 8, 8);
+const bulbMat = new THREE.MeshStandardMaterial({ color: 0xaa88ff, emissive: 0xaa44ff, emissiveIntensity: 2.0 });
+const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+bulb.position.set(0, -0.6, 0);
+fixtureGroup.add(bulb);
+
+fixtureGroup.position.set(0, 7.0, 0);
+scene.add(fixtureGroup);
+
+// ── ELECTRIC DEVICE (center of table) ──
+const DEVICE_POS = new THREE.Vector3(0, 0, 0);
+const deviceGroup = new THREE.Group();
+
+const baseMat = new THREE.MeshStandardMaterial({ color: 0x1a0020, roughness: 0.4, metalness: 0.8 });
+const basePlate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.06, 0.45), baseMat);
+basePlate.position.set(0, 0.09, 0);
+deviceGroup.add(basePlate);
+
+const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.38, 10), baseMat);
+pillar.position.set(0, 0.31, 0);
+deviceGroup.add(pillar);
+
+const electrodeGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.28, 8);
+const electrodeMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.3, metalness: 0.9 });
+
+const elecLeft = new THREE.Mesh(electrodeGeo, electrodeMat);
+elecLeft.position.set(-0.1, 0.64, 0);
+deviceGroup.add(elecLeft);
+
+const elecRight = new THREE.Mesh(electrodeGeo, electrodeMat);
+elecRight.position.set(0.1, 0.64, 0);
+deviceGroup.add(elecRight);
+
+// Glowing sphere tips
+const tipGeo = new THREE.SphereGeometry(0.038, 10, 10);
+let tipMatLeft = new THREE.MeshStandardMaterial({ color: 0xaa00ff, emissive: 0xaa00ff, emissiveIntensity: 2.5, roughness: 0.2 });
+let tipMatRight = new THREE.MeshStandardMaterial({ color: 0xaa00ff, emissive: 0xaa00ff, emissiveIntensity: 2.5, roughness: 0.2 });
+
+const tipLeft = new THREE.Mesh(tipGeo, tipMatLeft);
+tipLeft.position.set(-0.1, 0.795, 0);
+deviceGroup.add(tipLeft);
+
+const tipRight = new THREE.Mesh(tipGeo, tipMatRight);
+tipRight.position.set(0.1, 0.795, 0);
+deviceGroup.add(tipRight);
+
+// Device internal glow light
+const deviceLight = new THREE.PointLight(0x9900ff, 0.8, 1.2);
+deviceLight.position.set(0, 0.8, 0);
+deviceGroup.add(deviceLight);
+
+deviceGroup.position.copy(DEVICE_POS);
+scene.add(deviceGroup);
+
+let deviceTime = 0;
+function updateDevice(dt) {
+    deviceTime += dt;
+    const pulse = 0.5 + 0.5 * Math.sin(deviceTime * 2.1);
+    const pulse2 = 0.5 + 0.5 * Math.sin(deviceTime * 3.3 + 1.1);
+    tipMatLeft.emissiveIntensity = 1.8 + pulse * 1.5;
+    tipMatRight.emissiveIntensity = 1.8 + pulse2 * 1.5;
+    deviceLight.intensity = 0.5 + pulse * 0.7;
+}
+
+// ── DECK PILE ──
+const DECK_POS = new THREE.Vector3(-3.1, 0.065, 0.4);
+const deckEdgeMat = new THREE.MeshStandardMaterial({ color: 0x180020, emissive: 0x180020, emissiveIntensity: 0.4 });
+
+function makeBackTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 358;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#07000e';
+    ctx.fillRect(0, 0, 256, 358);
+    ctx.strokeStyle = '#4a0066';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(7, 7, 242, 344);
+    ctx.strokeStyle = '#330044';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(14, 14, 228, 330);
+    ctx.strokeStyle = 'rgba(60,0,90,0.35)';
+    ctx.lineWidth = 1;
+    const step = 16;
+    for (let i = -358; i < 256 + 358; i += step) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + 358, 358); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(i, 358); ctx.lineTo(i + 358, 0); ctx.stroke();
+    }
+    ctx.fillStyle = '#aa44ff';
+    ctx.font = 'bold 28px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('V-21', 128, 179);
+    return new THREE.CanvasTexture(canvas);
+}
+
+const backTex = makeBackTexture();
+const deckCardGeo = new THREE.BoxGeometry(0.75, 0.018, 1.05);
+const deckBackMat = new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.5 });
+
+for (let i = 0; i < 12; i++) {
+    const materials = [deckEdgeMat, deckEdgeMat, deckBackMat, deckBackMat, deckEdgeMat, deckEdgeMat];
+    const mesh = new THREE.Mesh(deckCardGeo, materials);
+    mesh.position.set(DECK_POS.x + (Math.random() - 0.5) * 0.02, DECK_POS.y + i * 0.019, DECK_POS.z + (Math.random() - 0.5) * 0.02);
+    mesh.rotation.y = (Math.random() - 0.5) * 0.1 - 0.15;
+    mesh.castShadow = true;
+    scene.add(mesh);
+}
+
+// ── CARD TEXTURES ──
+const faceTexCache = new Map();
+
+function makeFaceTexture(rank, suit) {
+    const key = rank + suit;
+    if (faceTexCache.has(key)) return faceTexCache.get(key);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 358;
+    const ctx = canvas.getContext('2d');
+
+    const red = suit === '♥' || suit === '♦';
+    const cardColor = red ? '#cc1133' : '#220033';
+
+    ctx.fillStyle = '#f4edff';
+    ctx.fillRect(0, 0, 256, 358);
+
+    ctx.strokeStyle = '#3a0055';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(5, 5, 246, 348);
+    ctx.strokeStyle = '#5a0077';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(10, 10, 236, 338);
+
+    ctx.fillStyle = cardColor;
+    ctx.font = 'bold 32px Courier New';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(rank, 16, 14);
+    ctx.font = '24px serif';
+    ctx.fillText(suit, 16, 48);
+
+    ctx.save();
+    ctx.translate(240, 344);
+    ctx.rotate(Math.PI);
+    ctx.fillStyle = cardColor;
+    ctx.font = 'bold 32px Courier New';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(rank, 16, 14);
+    ctx.font = '24px serif';
+    ctx.fillText(suit, 16, 48);
+    ctx.restore();
+
+    ctx.font = '96px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = cardColor;
+    ctx.globalAlpha = 0.85;
+    ctx.fillText(suit, 128, 179);
+    ctx.globalAlpha = 1.0;
+
+    const tex = new THREE.CanvasTexture(canvas);
+    faceTexCache.set(key, tex);
+    return tex;
+}
+
+// ── 3D CARD MANAGEMENT ──
+const PLAYER_Z = 1.9;
+const OPP_Z = -1.9;
+
+let playerCards3D = [];
+let oppCards3D = [];
+
+const tweens = [];
+
+function animateToDelayed(mesh, targetPos, duration, delay) {
+    const startPos = mesh.position.clone();
+    let elapsed = -delay;
+    tweens.push({
+        update(dt) {
+            elapsed += dt;
+            if (elapsed < 0) return false;
+            const t = Math.min(1, elapsed / duration);
+            // ease out cubic
+            const e = 1 - Math.pow(1 - t, 3);
+            mesh.position.lerpVectors(startPos, targetPos, e);
+            return t >= 1;
+        }
+    });
+}
+
+function cardXPositions(count) {
+    const spacing = count > 4 ? 0.78 : 0.85;
+    const positions = [];
+    const half = (count - 1) * spacing * 0.5;
+    for (let i = 0; i < count; i++) {
+        positions.push(i * spacing - half);
+    }
+    return positions;
+}
+
+function layoutCards3D(cards3D, zRow) {
+    const xs = cardXPositions(cards3D.length);
+    for (let i = 0; i < cards3D.length; i++) {
+        cards3D[i].userData.targetPos = new THREE.Vector3(xs[i], 0.075, zRow);
+    }
+}
+
+function clearCards3D(arr) {
+    for (const mesh of arr) {
+        scene.remove(mesh);
+        if (Array.isArray(mesh.material)) {
+            for (const m of mesh.material) {
+                if (m !== deckEdgeMat) m.dispose();
+            }
+        }
+    }
+    arr.length = 0;
+}
+
+function makeCardMesh(card, faceDown) {
+    const cardGeo = new THREE.BoxGeometry(0.75, 0.018, 1.05);
+    const edgeMat = new THREE.MeshStandardMaterial({ color: 0x180020, emissive: 0x180020, emissiveIntensity: 0.4, roughness: 0.6 });
+    let topMat;
+    if (faceDown) {
+        topMat = new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.5 });
+    } else {
+        const faceTex = makeFaceTexture(card.rank, card.suit);
+        topMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.5 });
+    }
+    const backFaceMat = new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.5 });
+    // [right, left, top, bottom, front, back]
+    // material[2] = top face (visible from above camera)
+    const materials = [edgeMat, edgeMat, topMat, backFaceMat, edgeMat, edgeMat];
+    const mesh = new THREE.Mesh(cardGeo, materials);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+}
+
+let playerPrevCount = 0;
+let oppPrevCount = 0;
+
+// ── SHOCK 3D EFFECTS ──
+let shakeIntensity = 0;
+let shakeDecay = 3.5;
+
+function updateShake(dt) {
+    if (shakeIntensity <= 0) return;
+    shakeIntensity = Math.max(0, shakeIntensity - dt * shakeDecay);
+    const s = shakeIntensity;
+    camera.position.set(
+        camBase.x + (Math.random() - 0.5) * s,
+        camBase.y + (Math.random() - 0.5) * s * 0.5,
+        camBase.z + (Math.random() - 0.5) * s * 0.3
+    );
+    camera.lookAt(0, 0.5, -0.5);
+}
+
+const shockArcs = [];
+
+function triggerShock3D(who, double) {
+    const targetZ = who === 'p1' ? PLAYER_Z : OPP_Z;
+    const arcCount = double ? 3 : 2;
+
+    for (let a = 0; a < arcCount; a++) {
+        const startPt = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.2,
+            0.8,
+            0.0
+        );
+        const endPt = new THREE.Vector3(
+            (Math.random() - 0.5) * 2.0,
+            0.12,
+            targetZ + (Math.random() - 0.5) * 0.5
+        );
+
+        const pts = [];
+        for (let i = 0; i <= 8; i++) {
+            const t = i / 8;
+            const jag = (i > 0 && i < 8) ? (Math.random() - 0.5) * 0.45 : 0;
+            pts.push(new THREE.Vector3(
+                startPt.x + (endPt.x - startPt.x) * t + jag,
+                startPt.y + (endPt.y - startPt.y) * t + (Math.random() - 0.5) * 0.3,
+                startPt.z + (endPt.z - startPt.z) * t + jag * 0.5
+            ));
+        }
+
+        const curve = new THREE.CatmullRomCurve3(pts);
+        const tubeGeo = new THREE.TubeGeometry(curve, 24, 0.012, 4, false);
+        const arcMat = new THREE.MeshBasicMaterial({
+            color: 0x88ddff,
+            transparent: true,
+            opacity: 0.9
+        });
+        const arc = new THREE.Mesh(tubeGeo, arcMat);
+        scene.add(arc);
+
+        const duration = 0.65 + Math.random() * 0.25;
+        let elapsed = 0;
+        let flickPhase = 0;
+
+        shockArcs.push({
+            mesh: arc,
+            mat: arcMat,
+            update(dt) {
+                elapsed += dt;
+                flickPhase += dt * 30;
+                const t = elapsed / duration;
+                if (t >= 1) {
+                    scene.remove(arc);
+                    tubeGeo.dispose();
+                    arcMat.dispose();
+                    return true;
+                }
+                const flick = 0.6 + 0.4 * Math.abs(Math.sin(flickPhase));
+                arcMat.opacity = (1 - t * t) * flick;
+                return false;
+            }
+        });
     }
 
-    if (Math.random() < 0.008) {
-        bgCtx.strokeStyle = `rgba(120,0,255,${Math.random() * 0.4})`;
-        bgCtx.lineWidth = 1;
-        bgCtx.beginPath();
-        const sx = Math.random() < 0.5 ? 50 : w - 50;
-        bgCtx.moveTo(sx, Math.random() * h);
-        for (let i = 0; i < 6; i++) bgCtx.lineTo(sx + (Math.random() - 0.5) * 30, Math.random() * h);
-        bgCtx.stroke();
-    }
+    // Blue flash light
+    const flashLight = new THREE.PointLight(0x44aaff, double ? 12 : 8, 6);
+    flashLight.position.set(0, 2.0, targetZ * 0.5);
+    scene.add(flashLight);
+    let flashElapsed = 0;
+    const flashDur = 0.4;
+    shockArcs.push({
+        mesh: null,
+        update(dt) {
+            flashElapsed += dt;
+            const t = flashElapsed / flashDur;
+            if (t >= 1) { scene.remove(flashLight); return true; }
+            flashLight.intensity = (double ? 12 : 8) * (1 - t * t);
+            return false;
+        }
+    });
 
-    requestAnimationFrame(drawBg);
+    // Camera shake
+    shakeIntensity = double ? 0.32 : 0.18;
 }
-drawBg();
 
 // ── AUDIO ──
 let audioCtx = null;
@@ -140,8 +586,8 @@ function playBonusSound() {
 // ── CARDS ──
 const SUITS = ['♠','♥','♦','♣'];
 const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
-const HIGH_RANKS = ['9','10','J','Q','K','10','J','Q','K','10']; // weighted high
-const LOW_RANKS  = ['2','3','4','2','3','4','2','3','A','5'];     // weighted low
+const HIGH_RANKS = ['9','10','J','Q','K','10','J','Q','K','10'];
+const LOW_RANKS  = ['2','3','4','2','3','4','2','3','A','5'];
 
 function makeDeck() { return shuffle(SUITS.flatMap(s => RANKS.map(r => ({ suit: s, rank: r })))); }
 function shuffle(a) {
@@ -224,7 +670,7 @@ function resetState() {
         p1: {
             lives: MAX_LIVES, hand: [], roundWins: 0,
             bonusCards: [], name: 'Player 1',
-            nextHandRig: null, // 'high' | 'low'
+            nextHandRig: null,
             shieldNext: false,
         },
         p2: {
@@ -237,6 +683,10 @@ function resetState() {
         phase: 'deal',
         isAnimating: false,
     };
+    playerPrevCount = 0;
+    oppPrevCount = 0;
+    clearCards3D(playerCards3D);
+    clearCards3D(oppCards3D);
 }
 
 // ── UI ELEMENTS ──
@@ -250,10 +700,8 @@ const ui = {
     bluffFill:    document.getElementById('bluff-fill'),
     messageBox:   document.getElementById('message-box'),
     handArea:     document.getElementById('hand-area'),
-    cardsRow:     document.getElementById('cards-row'),
     handValue:    document.getElementById('hand-value'),
     oppArea:      document.getElementById('opponent-area'),
-    oppCardsRow:  document.getElementById('opp-cards-row'),
     oppStatus:    document.getElementById('opp-status'),
     actionArea:   document.getElementById('action-area'),
     actionLabel:  document.getElementById('action-label'),
@@ -266,28 +714,32 @@ const ui = {
 };
 
 // ── BONUS CARD UI ──
-// Inject bonus card panels into the info-bar panels
 function injectBonusUI() {
     const p1Panel = document.getElementById('p1-panel');
     const p2Panel = document.getElementById('p2-panel');
 
-    const p1Bonus = document.createElement('div');
-    p1Bonus.id = 'p1-bonus-row';
-    p1Bonus.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;justify-content:center;min-height:20px;margin-top:4px;';
-    p1Panel.appendChild(p1Bonus);
+    if (!document.getElementById('p1-bonus-row')) {
+        const p1Bonus = document.createElement('div');
+        p1Bonus.id = 'p1-bonus-row';
+        p1Bonus.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;justify-content:center;min-height:20px;margin-top:4px;';
+        p1Panel.appendChild(p1Bonus);
+    }
 
-    const p2Bonus = document.createElement('div');
-    p2Bonus.id = 'p2-bonus-row';
-    p2Bonus.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;justify-content:center;min-height:20px;margin-top:4px;';
-    p2Panel.appendChild(p2Bonus);
+    if (!document.getElementById('p2-bonus-row')) {
+        const p2Bonus = document.createElement('div');
+        p2Bonus.id = 'p2-bonus-row';
+        p2Bonus.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;justify-content:center;min-height:20px;margin-top:4px;';
+        p2Panel.appendChild(p2Bonus);
+    }
 
-    // Round win tracker
     const centerInfo = document.getElementById('center-info');
-    const winRow = document.createElement('div');
-    winRow.id = 'win-row';
-    winRow.style.cssText = 'display:flex;gap:6px;align-items:center;font-size:0.5em;letter-spacing:4px;color:#440055;';
-    winRow.innerHTML = '<span id="p1-wins">P1: 0</span><span style="color:#220033">|</span><span id="p2-wins">P2: 0</span>';
-    centerInfo.appendChild(winRow);
+    if (!document.getElementById('win-row')) {
+        const winRow = document.createElement('div');
+        winRow.id = 'win-row';
+        winRow.style.cssText = 'display:flex;gap:6px;align-items:center;font-size:0.5em;letter-spacing:4px;color:#440055;';
+        winRow.innerHTML = '<span id="p1-wins">P1: 0</span><span style="color:#220033">|</span><span id="p2-wins">P2: 0</span>';
+        centerInfo.appendChild(winRow);
+    }
 }
 
 function renderBonusCards(who) {
@@ -326,17 +778,6 @@ function renderLives(el, lives) {
     }
 }
 
-function renderCard(card, faceDown = false) {
-    const el = document.createElement('div');
-    el.className = 'card';
-    if (faceDown) { el.classList.add('face-down'); el.textContent = '?'; }
-    else {
-        if (isRedSuit(card.suit)) el.classList.add('red-suit');
-        el.textContent = card.rank + card.suit;
-    }
-    return el;
-}
-
 function updateUI() {
     renderLives(ui.p1Lives, state.p1.lives);
     renderLives(ui.p2Lives, state.p2.lives);
@@ -350,17 +791,41 @@ function updateUI() {
     if (p1Wins) p1Wins.textContent = `${state.p1.name.split(' ')[0]}: ${state.p1.roundWins}`;
     if (p2Wins) p2Wins.textContent = `${state.p2.name.split(' ')[0]}: ${state.p2.roundWins}`;
 
-    // Bluff fill = tension normalized
     ui.bluffFill.style.height = `${Math.min(100, state.tension)}%`;
 
     renderBonusCards('p1');
     renderBonusCards('p2');
 }
 
+// ── 3D RENDER HAND ──
 function renderHand(hand, showAll = true) {
-    ui.cardsRow.innerHTML = '';
-    for (let i = 0; i < hand.length; i++)
-        ui.cardsRow.appendChild(renderCard(hand[i], !showAll && i > 0));
+    const prevCount = playerPrevCount;
+    const freshDeal = prevCount === 0 || prevCount >= hand.length;
+
+    clearCards3D(playerCards3D);
+
+    const xs = cardXPositions(hand.length);
+    for (let i = 0; i < hand.length; i++) {
+        const faceDown = !showAll && i > 0;
+        const mesh = makeCardMesh(hand[i], faceDown);
+        // Start at deck position
+        mesh.position.copy(DECK_POS);
+        mesh.position.y = DECK_POS.y + 0.3 + i * 0.01;
+        scene.add(mesh);
+        playerCards3D.push(mesh);
+
+        const targetPos = new THREE.Vector3(xs[i], 0.075, PLAYER_Z);
+        const delay = freshDeal ? i * 0.08 : (i === hand.length - 1 ? 0 : -1);
+
+        if (delay >= 0) {
+            animateToDelayed(mesh, targetPos, 0.35, delay);
+        } else {
+            mesh.position.copy(targetPos);
+        }
+    }
+
+    playerPrevCount = hand.length;
+
     const total = handTotal(hand);
     ui.handValue.textContent = showAll
         ? `Total: ${total}${isBust(hand) ? ' — BUST' : isBlackjack(hand) ? ' — BLACKJACK!' : ''}`
@@ -369,9 +834,34 @@ function renderHand(hand, showAll = true) {
 }
 
 function renderOppHand(hand, showAll = false, statusText = '') {
-    ui.oppCardsRow.innerHTML = '';
-    for (const card of hand)
-        ui.oppCardsRow.appendChild(renderCard(card, !showAll));
+    const prevCount = oppPrevCount;
+    const freshDeal = prevCount === 0 || prevCount >= hand.length;
+
+    clearCards3D(oppCards3D);
+
+    const xs = cardXPositions(hand.length);
+    for (let i = 0; i < hand.length; i++) {
+        const faceDown = !showAll;
+        const mesh = makeCardMesh(hand[i], faceDown);
+        mesh.position.copy(DECK_POS);
+        mesh.position.y = DECK_POS.y + 0.3 + i * 0.01;
+        // Rotate 180 around Y so card faces away from camera (opponent's perspective)
+        mesh.rotation.y = Math.PI;
+        scene.add(mesh);
+        oppCards3D.push(mesh);
+
+        const targetPos = new THREE.Vector3(xs[i], 0.075, OPP_Z);
+        const delay = freshDeal ? i * 0.08 : (i === hand.length - 1 ? 0 : -1);
+
+        if (delay >= 0) {
+            animateToDelayed(mesh, targetPos, 0.35, delay);
+        } else {
+            mesh.position.copy(targetPos);
+        }
+    }
+
+    oppPrevCount = hand.length;
+
     ui.oppStatus.textContent = statusText;
     ui.oppArea.classList.remove('hidden');
 }
@@ -381,7 +871,6 @@ async function doShock(who, double = false) {
     initAudio();
     const lives = double ? 2 : 1;
 
-    // Check shield
     if (state[who].shieldNext) {
         state[who].shieldNext = false;
         const shieldIdx = state[who].bonusCards.indexOf('insulate');
@@ -395,6 +884,9 @@ async function doShock(who, double = false) {
     ui.shockOverlay.classList.remove('shocking');
     void ui.shockOverlay.offsetWidth;
     ui.shockOverlay.classList.add('shocking');
+
+    // 3D shock effects
+    triggerShock3D(who, double);
 
     const panel = document.getElementById(`${who}-panel`);
     panel.style.boxShadow = double
@@ -426,6 +918,8 @@ function dealHand(who) {
 }
 
 async function dealRound() {
+    playerPrevCount = 0;
+    oppPrevCount = 0;
     state.p1.hand = dealHand('p1');
     state.p2.hand = dealHand('p2');
     playCardFlip();
@@ -439,7 +933,6 @@ async function awardBonus(who) {
     const card = randomBonus();
     playBonusSound();
 
-    // Surge activates immediately
     if (card === 'surge') {
         const opp = who === 'p1' ? 'p2' : 'p1';
         await showMessage(`${state[who].name} draws SURGE — instant shock!`, 2000);
@@ -448,12 +941,10 @@ async function awardBonus(who) {
         return;
     }
 
-    // Insulate activates passively
     if (card === 'insulate') {
         state[who].shieldNext = true;
     }
 
-    // Rigged hands apply to opponent
     if (card === 'loaded_high') {
         const opp = who === 'p1' ? 'p2' : 'p1';
         state[opp].nextHandRig = 'high';
@@ -492,7 +983,6 @@ function waitForAction(who, busted = false) {
     });
 }
 
-// Bluffer picks a value to claim
 function waitForClaim() {
     return new Promise(resolve => {
         ui.actionLabel.textContent = 'Claim your hand value:';
@@ -515,7 +1005,6 @@ function waitForClaim() {
     });
 }
 
-// Opponent sees the claim and decides
 function waitForBluffResponse(who, claim) {
     return new Promise(resolve => {
         _actionResolve = null;
@@ -553,10 +1042,14 @@ async function localPlayerTurn(who) {
     const opp    = who === 'p1' ? state.p2 : state.p1;
     const oppWho = who === 'p1' ? 'p2' : 'p1';
 
-    // Hide everything, show turn banner
     ui.handArea.classList.add('hidden');
     ui.oppArea.classList.add('hidden');
     ui.actionArea.classList.add('hidden');
+    clearCards3D(playerCards3D);
+    clearCards3D(oppCards3D);
+    playerPrevCount = 0;
+    oppPrevCount = 0;
+
     ui.turnBanner.textContent = `${player.name}'s Turn — Look Away, ${opp.name}`;
     ui.turnBanner.classList.remove('hidden');
     await wait(1800);
@@ -590,12 +1083,12 @@ async function localPlayerTurn(who) {
             state.tension = Math.min(100, state.tension + 15);
             updateUI();
 
-            // Bluffer privately picks their claim — opponent looks away
             const claim = await waitForClaim();
             ui.actionArea.classList.add('hidden');
             ui.handArea.classList.add('hidden');
+            clearCards3D(playerCards3D);
+            playerPrevCount = 0;
 
-            // Show opponent their own hand + the claim
             ui.turnBanner.textContent = `${opp.name} — Look now.`;
             ui.turnBanner.classList.remove('hidden');
             await wait(1600);
@@ -606,14 +1099,9 @@ async function localPlayerTurn(who) {
             ui.actionArea.classList.add('hidden');
 
             if (response === 'fold') {
-                await showMessage(`${opp.name} folds.`, 1600);
-                const useDouble = consumeDoubleShock(who);
-                opp.lives = Math.max(0, opp.lives - (useDouble ? 2 : 1));
-                updateUI();
-                await doShock(oppWho, useDouble);
+                await showMessage(`${opp.name} folds. Round conceded.`, 1600);
                 return { result: 'bluff-win', who };
             } else {
-                // Called — reveal both hands and compare
                 playReveal();
                 renderHand(player.hand, true);
                 renderOppHand(opp.hand, true, '');
@@ -646,19 +1134,15 @@ async function localPlayerTurn(who) {
 
 // ── RESOLVE ROUND (LOCAL) ──
 async function resolveRound(r1, r2) {
-    // r1/r2 = { result, who } from each player's turn
-    // Bluff/fold results are already settled inline, just need to track round wins
     const p1Done = r1.result;
     const p2Done = r2 ? r2.result : null;
 
-    // If a player already won via bluff, count that as their round win
     if (p1Done === 'bluff-win') { state.p1.roundWins++; updateUI(); return; }
     if (p1Done === 'bluff-loss' && r2 === null) { state.p2.roundWins++; updateUI(); return; }
     if (p1Done === 'fold') { state.p2.roundWins++; updateUI(); return; }
     if (p2Done === 'bluff-win') { state.p2.roundWins++; updateUI(); return; }
     if (p2Done === 'fold') { state.p1.roundWins++; updateUI(); return; }
 
-    // Standard showdown
     playReveal();
     renderHand(state.p1.hand, true);
     renderOppHand(state.p2.hand, true, `${state.p2.name}: ${handTotal(state.p2.hand)}`);
@@ -714,6 +1198,11 @@ function showGameOver(winner) {
     const title  = document.getElementById('game-over-title');
     const sub    = document.getElementById('game-over-sub');
 
+    clearCards3D(playerCards3D);
+    clearCards3D(oppCards3D);
+    playerPrevCount = 0;
+    oppPrevCount = 0;
+
     if (winner === 'tie') {
         title.textContent = 'DEAD HEAT';
         title.style.color = '#888';
@@ -734,14 +1223,21 @@ async function runLocalGame() {
         const r1 = await localPlayerTurn('p1');
         ui.handArea.classList.add('hidden');
         ui.oppArea.classList.add('hidden');
+        clearCards3D(playerCards3D);
+        clearCards3D(oppCards3D);
+        playerPrevCount = 0;
+        oppPrevCount = 0;
 
         let r2 = null;
-        // Only play p2 turn if p1 didn't end round early (bluff/fold already settled)
         const p1EarlyEnd = ['bluff-win','bluff-loss','fold'].includes(r1.result);
         if (!p1EarlyEnd) {
             r2 = await localPlayerTurn('p2');
             ui.handArea.classList.add('hidden');
             ui.oppArea.classList.add('hidden');
+            clearCards3D(playerCards3D);
+            clearCards3D(oppCards3D);
+            playerPrevCount = 0;
+            oppPrevCount = 0;
         }
 
         await resolveRound(r1, r2);
@@ -786,7 +1282,6 @@ function applyNetState(s) {
 
 function handleGuestMessage(data) {
     if (data.type === 'action' && online._resolvers.action) {
-        // Pass the full data object so host can read .claim for bluffs
         online._resolvers.action(data.claim !== undefined ? data : data.value);
         delete online._resolvers.action;
     }
@@ -810,7 +1305,6 @@ function handleHostMessage(data) {
             break;
         case 'bonus':
             playBonusSound();
-            // guest sees what bonus host got
             break;
         case 'oppAction':
             const opp = data.action;
@@ -829,6 +1323,7 @@ function handleHostMessage(data) {
 
 function startGuestTurnUI(hand) {
     state.p2.hand = hand;
+    playerPrevCount = 0;
     renderHand(hand, true);
     ui.actionLabel.textContent = 'Your Turn';
     ui.drawRow.classList.remove('hidden');
@@ -841,7 +1336,6 @@ function startGuestTurnUI(hand) {
     document.getElementById('btn-fold').onclick  = () => send('fold');
     document.getElementById('btn-bluff').onclick = async () => {
         ui.actionArea.classList.add('hidden');
-        const busted = isBust(state.p2.hand);
         const claim  = await waitForClaim();
         ui.actionArea.classList.add('hidden');
         sendToHost({ type: 'action', value: 'bluff', claim });
@@ -861,6 +1355,7 @@ async function waitGuest() {
 }
 
 async function onlineHostPlayerTurn() {
+    playerPrevCount = 0;
     renderHand(state.p1.hand, true);
     sendToGuest({ type: 'message', text: "Opponent's turn...", duration: 500 });
 
@@ -889,7 +1384,6 @@ async function onlineHostPlayerTurn() {
         } else if (action === 'bluff') {
             playBluffSound();
             state.tension = Math.min(100, state.tension + 15);
-            // Host picks claim privately — guest doesn't know yet
             const claim = await waitForClaim();
             ui.actionArea.classList.add('hidden');
             sendToGuest({ type: 'waitBluffCall', claim });
@@ -898,13 +1392,8 @@ async function onlineHostPlayerTurn() {
             broadcastState();
 
             if (response === 'fold') {
-                await showMessage(`${state.p2.name} folds.`, 1600);
-                sendToGuest({ type: 'message', text: 'You folded.', duration: 1400 });
-                const useDouble = consumeDoubleShock('p1');
-                state.p2.lives = Math.max(0, state.p2.lives - (useDouble ? 2 : 1));
-                broadcastState();
-                sendToGuest({ type: 'shock', who: 'p2', double: useDouble });
-                await doShock('p2', useDouble);
+                await showMessage(`${state.p2.name} folds. Round conceded.`, 1600);
+                sendToGuest({ type: 'message', text: 'You folded. Round conceded.', duration: 1600 });
                 return { result: 'bluff-win', who: 'p1' };
             } else {
                 sendToGuest({ type: 'reveal', hostHand: state.p1.hand, guestHand: state.p2.hand });
@@ -974,9 +1463,6 @@ async function onlineGuestPlayerTurn() {
         } else if (action === 'bluff') {
             playBluffSound();
             state.tension = Math.min(100, state.tension + 15);
-            // Guest sent their bluff — host picks claim to show guest
-            // (guest already chose claim on their end via startGuestTurnUI sending action='bluff'
-            //  but we need the claim value — guest sends it along)
             const guestClaim = actionObj.claim || 20;
             sendToGuest({ type: 'message', text: 'You bluffed! Waiting...', duration: 1000 });
 
@@ -985,12 +1471,8 @@ async function onlineGuestPlayerTurn() {
             sendToGuest({ type: 'message', text: response === 'call' ? 'Called!' : 'Folded!', duration: 1000 });
 
             if (response === 'fold') {
-                await showMessage(`You fold.`, 1600);
-                const useDouble = consumeDoubleShock('p2');
-                state.p1.lives = Math.max(0, state.p1.lives - (useDouble ? 2 : 1));
-                broadcastState();
-                sendToGuest({ type: 'shock', who: 'p1', double: useDouble });
-                await doShock('p1', useDouble);
+                await showMessage(`You fold. Round conceded.`, 1600);
+                sendToGuest({ type: 'message', text: `${state.p2.name} folds. Round conceded.`, duration: 1600 });
                 return { result: 'bluff-win', who: 'p2' };
             } else {
                 sendToGuest({ type: 'reveal', hostHand: state.p1.hand, guestHand: state.p2.hand });
@@ -1092,6 +1574,10 @@ async function runOnlineHostGame() {
         const r1 = await onlineHostPlayerTurn();
         ui.handArea.classList.add('hidden');
         ui.oppArea.classList.add('hidden');
+        clearCards3D(playerCards3D);
+        clearCards3D(oppCards3D);
+        playerPrevCount = 0;
+        oppPrevCount = 0;
 
         const p1EarlyEnd = ['bluff-win','bluff-loss','fold'].includes(r1.result);
         let r2 = null;
@@ -1193,11 +1679,34 @@ async function startGame() {
     } else if (mode === 'online-host') {
         await runOnlineHostGame();
     } else {
-        // Guest — wait for host messages
         resetState(); updateUI();
+        oppPrevCount = 0;
         renderOppHand([], false, '');
         await showMessage('Connected. Waiting for host...', 1800);
     }
 }
+
+// ── ANIMATION LOOP ──
+function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+
+    updateFlicker(dt);
+    updateDevice(dt);
+    updateShake(dt);
+
+    // Update tween animations
+    for (let i = tweens.length - 1; i >= 0; i--) {
+        if (tweens[i].update(dt)) tweens.splice(i, 1);
+    }
+
+    // Update shock arc effects
+    for (let i = shockArcs.length - 1; i >= 0; i--) {
+        if (shockArcs[i].update(dt)) shockArcs.splice(i, 1);
+    }
+
+    renderer.render(scene, camera);
+}
+animate();
 
 startGame();
