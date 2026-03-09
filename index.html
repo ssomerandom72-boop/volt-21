@@ -17,6 +17,8 @@
         user-select: none;
     }
 
+    canvas { position: fixed; top: 0; left: 0; }
+
     /* ── OVERLAYS ── */
     #shock-overlay {
         position: fixed; inset: 0;
@@ -166,6 +168,40 @@
         text-transform: uppercase;
     }
 
+    #cards-row {
+        display: flex;
+        gap: 8px;
+    }
+
+    .card {
+        width: 54px;
+        height: 76px;
+        background: rgba(8,0,12,0.95);
+        border: 1px solid #550077;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1em;
+        letter-spacing: 1px;
+        color: #cc88ff;
+        box-shadow: 0 0 8px rgba(100,0,180,0.3);
+        position: relative;
+        transition: transform 0.15s;
+    }
+
+    .card.red-suit { color: #ff4466; }
+    .card.face-down {
+        color: #220033;
+        background: repeating-linear-gradient(
+            45deg,
+            #0a000f,
+            #0a000f 4px,
+            #110019 4px,
+            #110019 8px
+        );
+    }
+
     #hand-value {
         font-size: 0.65em;
         letter-spacing: 4px;
@@ -264,6 +300,8 @@
         text-transform: uppercase;
     }
 
+    #opp-cards-row { display: flex; gap: 8px; }
+
     #opp-status {
         font-size: 0.55em;
         letter-spacing: 4px;
@@ -324,7 +362,6 @@
         background: rgba(0,0,0,0.93);
         z-index: 100;
         gap: 0;
-        pointer-events: auto;
     }
 
     #lobby-content {
@@ -408,7 +445,6 @@
         background: rgba(0,0,0,0.92);
         z-index: 110;
         gap: 24px;
-        pointer-events: auto;
     }
 
     #game-over-title {
@@ -486,6 +522,7 @@
 </head>
 <body>
 
+<canvas id="bg-canvas"></canvas>
 <div id="vignette"></div>
 <div id="shock-overlay"></div>
 <div id="static-overlay"></div>
@@ -512,12 +549,14 @@
     <!-- Opponent's hidden hand (top) -->
     <div id="opponent-area" class="hidden">
         <div id="opp-label">Opponent Hand</div>
+        <div id="opp-cards-row"></div>
         <div id="opp-status"></div>
     </div>
 
     <!-- Player's hand (bottom) -->
     <div id="hand-area" class="hidden">
         <div id="hand-label">Your Hand</div>
+        <div id="cards-row"></div>
         <div id="hand-value"></div>
     </div>
 
@@ -581,7 +620,6 @@
     </div>
 </div>
 
-<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="game.js"></script>
 </body>
