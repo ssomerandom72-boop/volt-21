@@ -1261,6 +1261,12 @@ async function resolveRound(r1, r2) {
     renderHand(state.p1.hand, true);
     renderOppHand(state.p2.hand, true, '');
 
+    // Mask badges with declared values so bluffers don't leak their real total
+    const p1Badge = document.getElementById('player-total');
+    const p2Badge = document.getElementById('opp-total');
+    if (state.p1.claim && p1Badge) { p1Badge.textContent = `${d1} (claimed)`; p1Badge.className = 'total-badge'; }
+    if (state.p2.claim && p2Badge) { p2Badge.textContent = `${d2} (claimed)`; p2Badge.className = 'total-badge'; }
+
     const p1Label = state.p1.claim ? `${state.p1.name} claims ${d1}` : `${state.p1.name}: ${d1}`;
     const p2Label = state.p2.claim ? `${state.p2.name} claims ${d2}` : `${state.p2.name}: ${d2}`;
     await showMessage(`${p1Label} vs ${p2Label}`, 2000);
@@ -1287,7 +1293,9 @@ async function resolveRound(r1, r2) {
             return;
         }
 
-        // Called bluff — reveal real values and judge
+        // Called bluff — reveal real totals in badges now
+        renderHand(state.p1.hand, true);
+        renderOppHand(state.p2.hand, true, '');
         await showMessage('Real hands revealed!', 1200);
         let realWinner = null;
         if (bust1 && bust2)  { /* draw */ }
