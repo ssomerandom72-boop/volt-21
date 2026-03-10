@@ -567,7 +567,10 @@ function triggerShock3D(who, double) {
 // ── AUDIO ──
 let audioCtx = null;
 function initAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        loadGrunts();
+    }
 }
 
 function playShock() {
@@ -648,30 +651,30 @@ function playBonusSound() {
     });
 }
 
-function playGrunt(double = false) {
-    if (!audioCtx) return;
-    const dur = double ? 0.9 : 0.55;
-    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
-    const data = buf.getChannelData(0);
-    // Low guttural tone mixed with noise burst
-    const baseFreq = 90 + Math.random() * 40;
-    for (let i = 0; i < data.length; i++) {
-        const t = i / audioCtx.sampleRate;
-        const env = Math.exp(-t * (double ? 3.5 : 5.5)) * (1 - Math.exp(-t * 80));
-        const tone = Math.sin(2 * Math.PI * baseFreq * t) * 0.5
-                   + Math.sin(2 * Math.PI * baseFreq * 2.1 * t) * 0.25
-                   + Math.sin(2 * Math.PI * baseFreq * 0.5 * t) * 0.3;
-        const noise = (Math.random() * 2 - 1) * 0.15;
-        data[i] = (tone + noise) * env * (double ? 0.85 : 0.65);
+const GRUNT_FILES = [
+    'tunetank.com_grunt-short-and-high-(male).wav',
+    'universfield-male-exertion-grunts-352689.mp3',
+];
+const gruntBuffers = [];
+async function loadGrunts() {
+    for (const file of GRUNT_FILES) {
+        try {
+            const res = await fetch(file);
+            const arr = await res.arrayBuffer();
+            const buf = await audioCtx.decodeAudioData(arr);
+            gruntBuffers.push(buf);
+        } catch (e) { /* file missing or decode failed, skip */ }
     }
+}
+
+function playGrunt(double = false) {
+    if (!audioCtx || gruntBuffers.length === 0) return;
+    const buf = gruntBuffers[Math.floor(Math.random() * gruntBuffers.length)];
     const src = audioCtx.createBufferSource();
     src.buffer = buf;
-    const dist = audioCtx.createWaveShaper();
-    const curve = new Float32Array(256);
-    for (let i = 0; i < 256; i++) { const x = (i * 2) / 256 - 1; curve[i] = (Math.PI + 180) * x / (Math.PI + 180 * Math.abs(x)); }
-    dist.curve = curve;
-    const gain = audioCtx.createGain(); gain.gain.value = 1.1;
-    src.connect(dist); dist.connect(gain); gain.connect(audioCtx.destination);
+    const gain = audioCtx.createGain();
+    gain.gain.value = double ? 1.3 : 0.9;
+    src.connect(gain); gain.connect(audioCtx.destination);
     src.start();
 }
 
