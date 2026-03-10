@@ -1127,6 +1127,21 @@ function waitForClaim() {
     });
 }
 
+function waitForChallenge(who) {
+    return new Promise(resolve => {
+        _actionResolve = null;
+        ui.actionLabel.textContent = `${state[who].name}: They have more cards — Call Bluff?`;
+        ui.drawRow.classList.add('hidden');
+        ui.bluffRow.innerHTML = `
+            <button id="btn-do-challenge" class="danger">⚡ Call Bluff</button>
+            <button id="btn-no-challenge" class="safe">Pass</button>`;
+        document.getElementById('btn-do-challenge').onclick = () => { ui.bluffRow.innerHTML = ''; ui.drawRow.classList.remove('hidden'); ui.actionArea.classList.add('hidden'); resolve(true); };
+        document.getElementById('btn-no-challenge').onclick = () => { ui.bluffRow.innerHTML = ''; ui.drawRow.classList.remove('hidden'); ui.actionArea.classList.add('hidden'); resolve(false); };
+        ui.bluffRow.classList.remove('hidden');
+        ui.actionArea.classList.remove('hidden');
+    });
+}
+
 function waitForBluffResponse(who, claim) {
     return new Promise(resolve => {
         _actionResolve = null;
@@ -1276,6 +1291,14 @@ async function resolveRound(r1, r2) {
     const t2 = handTotal(state.p2.hand), bust2 = isBust(state.p2.hand);
     const bj1 = isBlackjack(state.p1.hand), bj2 = isBlackjack(state.p2.hand);
 
+    // Challenge phase: player with fewer cards can call bluff on the other
+    let p1Called = false, p2Called = false;
+    if (state.p2.hand.length > state.p1.hand.length) {
+        p1Called = await waitForChallenge('p1');
+    } else if (state.p1.hand.length > state.p2.hand.length) {
+        p2Called = await waitForChallenge('p2');
+    }
+
     if (bust1 && bust2) {
         await showMessage('Both bust. Neither wins the round.', 2000);
         return;
@@ -1295,11 +1318,31 @@ async function resolveRound(r1, r2) {
     state[winner].roundWins++;
     updateUI();
 
+    // Resolve challenges
+    if (p1Called) {
+        if (winner === 'p1') {
+            await showMessage(`${state.p1.name} called it! ${state.p2.name} pays!`, 2000);
+            await doShock('p2', false);
+        } else {
+            await showMessage(`Wrong call! ${state.p1.name} pays!`, 2000);
+            await doShock('p1', false);
+        }
+    }
+    if (p2Called) {
+        if (winner === 'p2') {
+            await showMessage(`${state.p2.name} called it! ${state.p1.name} pays!`, 2000);
+            await doShock('p1', false);
+        } else {
+            await showMessage(`Wrong call! ${state.p2.name} pays!`, 2000);
+            await doShock('p2', false);
+        }
+    }
+
     if (bjWin) {
         await showMessage(`${winName} hits BLACKJACK! Shock!`, 2000);
         const useDouble = consumeDoubleShock(winner);
         await doShock(loser, useDouble);
-    } else {
+    } else if (!p1Called && !p2Called) {
         await showMessage(`${winName} wins the round!`, 1800);
         await awardBonus(winner);
     }
