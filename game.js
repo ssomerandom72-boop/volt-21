@@ -35,23 +35,28 @@ window.addEventListener('resize', () => {
 const clock = new THREE.Clock();
 
 // ── LIGHTING ──
-const ambientLight = new THREE.AmbientLight(0x110022, 0.6);
+const ambientLight = new THREE.AmbientLight(0x221133, 1.8);
 scene.add(ambientLight);
 
-const mainLight = new THREE.PointLight(0xaa44ff, 5, 15);
+const mainLight = new THREE.PointLight(0xcc66ff, 8, 18);
 mainLight.position.set(0, 5.5, 0);
 mainLight.castShadow = true;
 mainLight.shadow.mapSize.width = 1024;
 mainLight.shadow.mapSize.height = 1024;
 scene.add(mainLight);
 
-const fillLeft = new THREE.PointLight(0x440088, 1.2, 12);
+const fillLeft = new THREE.PointLight(0x6600cc, 2.5, 14);
 fillLeft.position.set(-5, 3, 2);
 scene.add(fillLeft);
 
-const fillRight = new THREE.PointLight(0x440088, 1.2, 12);
+const fillRight = new THREE.PointLight(0x6600cc, 2.5, 14);
 fillRight.position.set(5, 3, 2);
 scene.add(fillRight);
+
+// Extra light aimed at opponent card zone so their cards are readable
+const oppLight = new THREE.PointLight(0x9944ff, 3.5, 10);
+oppLight.position.set(0, 3.5, -2.5);
+scene.add(oppLight);
 
 // ── FLICKER STATE ──
 let flickerTimer = 0;
@@ -643,6 +648,33 @@ function playBonusSound() {
     });
 }
 
+function playGrunt(double = false) {
+    if (!audioCtx) return;
+    const dur = double ? 0.9 : 0.55;
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    // Low guttural tone mixed with noise burst
+    const baseFreq = 90 + Math.random() * 40;
+    for (let i = 0; i < data.length; i++) {
+        const t = i / audioCtx.sampleRate;
+        const env = Math.exp(-t * (double ? 3.5 : 5.5)) * (1 - Math.exp(-t * 80));
+        const tone = Math.sin(2 * Math.PI * baseFreq * t) * 0.5
+                   + Math.sin(2 * Math.PI * baseFreq * 2.1 * t) * 0.25
+                   + Math.sin(2 * Math.PI * baseFreq * 0.5 * t) * 0.3;
+        const noise = (Math.random() * 2 - 1) * 0.15;
+        data[i] = (tone + noise) * env * (double ? 0.85 : 0.65);
+    }
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const dist = audioCtx.createWaveShaper();
+    const curve = new Float32Array(256);
+    for (let i = 0; i < 256; i++) { const x = (i * 2) / 256 - 1; curve[i] = (Math.PI + 180) * x / (Math.PI + 180 * Math.abs(x)); }
+    dist.curve = curve;
+    const gain = audioCtx.createGain(); gain.gain.value = 1.1;
+    src.connect(dist); dist.connect(gain); gain.connect(audioCtx.destination);
+    src.start();
+}
+
 // ── CARDS ──
 const SUITS = ['♠','♥','♦','♣'];
 const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
@@ -891,6 +923,14 @@ function renderHand(hand, showAll = true) {
         ? `Total: ${total}${isBust(hand) ? ' — BUST' : isBlackjack(hand) ? ' — BLACKJACK!' : ''}`
         : `Showing: ${cardValue(hand[0])}`;
     ui.handArea.classList.remove('hidden');
+
+    // Live total badge
+    const ptBadge = document.getElementById('player-total');
+    if (ptBadge && showAll) {
+        ptBadge.textContent = isBust(hand) ? `BUST` : isBlackjack(hand) ? `21 ⚡` : `${total}`;
+        ptBadge.className = 'total-badge' + (isBust(hand) ? ' busted' : isBlackjack(hand) ? ' blackjack' : '');
+        ptBadge.classList.remove('hidden');
+    }
 }
 
 function renderOppHand(hand, showAll = false, statusText = '') {
@@ -922,6 +962,21 @@ function renderOppHand(hand, showAll = false, statusText = '') {
 
     oppPrevCount = hand.length;
 
+    // Opponent total badge — show count when hidden, total when revealed
+    const otBadge = document.getElementById('opp-total');
+    if (otBadge) {
+        if (showAll && hand.length > 0) {
+            const ot = handTotal(hand);
+            otBadge.textContent = isBust(hand) ? `BUST` : isBlackjack(hand) ? `21 ⚡` : `${ot}`;
+            otBadge.className = 'total-badge' + (isBust(hand) ? ' busted' : isBlackjack(hand) ? ' blackjack' : '');
+        } else {
+            otBadge.textContent = hand.length > 0 ? `${hand.length} cards` : '';
+            otBadge.className = 'total-badge';
+        }
+        if (hand.length > 0) otBadge.classList.remove('hidden');
+        else otBadge.classList.add('hidden');
+    }
+
     ui.oppStatus.textContent = statusText;
     ui.oppArea.classList.remove('hidden');
 }
@@ -941,6 +996,7 @@ async function doShock(who, double = false) {
     }
 
     double ? playBigShock() : playShock();
+    setTimeout(() => playGrunt(double), 80);
     ui.shockOverlay.classList.remove('shocking');
     void ui.shockOverlay.offsetWidth;
     ui.shockOverlay.classList.add('shocking');
@@ -1105,6 +1161,8 @@ async function localPlayerTurn(who) {
     ui.handArea.classList.add('hidden');
     ui.oppArea.classList.add('hidden');
     ui.actionArea.classList.add('hidden');
+    document.getElementById('player-total')?.classList.add('hidden');
+    document.getElementById('opp-total')?.classList.add('hidden');
     clearCards3D(playerCards3D);
     clearCards3D(oppCards3D);
     playerPrevCount = 0;
