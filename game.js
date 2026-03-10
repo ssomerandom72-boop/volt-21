@@ -1291,13 +1291,9 @@ async function resolveRound(r1, r2) {
     const t2 = handTotal(state.p2.hand), bust2 = isBust(state.p2.hand);
     const bj1 = isBlackjack(state.p1.hand), bj2 = isBlackjack(state.p2.hand);
 
-    // Challenge phase: player with fewer cards can call bluff on the other
-    let p1Called = false, p2Called = false;
-    if (state.p2.hand.length > state.p1.hand.length) {
-        p1Called = await waitForChallenge('p1');
-    } else if (state.p1.hand.length > state.p2.hand.length) {
-        p2Called = await waitForChallenge('p2');
-    }
+    // Challenge phase: both players can call bluff on the other at showdown
+    const p1Called = await waitForChallenge('p1');
+    const p2Called = await waitForChallenge('p2');
 
     if (bust1 && bust2) {
         await showMessage('Both bust. Neither wins the round.', 2000);
