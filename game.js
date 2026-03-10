@@ -1267,9 +1267,7 @@ async function resolveRound(r1, r2) {
     if (state.p1.claim && p1Badge) { p1Badge.textContent = `${d1} (claimed)`; p1Badge.className = 'total-badge'; }
     if (state.p2.claim && p2Badge) { p2Badge.textContent = `${d2} (claimed)`; p2Badge.className = 'total-badge'; }
 
-    const p1Label = state.p1.claim ? `${state.p1.name} claims ${d1}` : `${state.p1.name}: ${d1}`;
-    const p2Label = state.p2.claim ? `${state.p2.name} claims ${d2}` : `${state.p2.name}: ${d2}`;
-    await showMessage(`${p1Label} vs ${p2Label}`, 2000);
+    await showMessage('Showdown.', 1200);
 
     let declaredWinner = null;
     if (d1Bust && d2Bust)     { /* both bust declared — fall through to real compare */ }
