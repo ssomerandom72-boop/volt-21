@@ -450,6 +450,78 @@
     /* ── HIDDEN ── */
     .hidden { display: none !important; }
 
+    /* ── TOUCH ACTIVE STATES ── */
+    button:active {
+        background: rgba(80,0,120,0.88);
+        color: #fff;
+        box-shadow: 0 0 16px rgba(180,0,255,0.6);
+    }
+    button.danger:active {
+        background: rgba(120,0,0,0.88);
+        box-shadow: 0 0 16px rgba(255,0,0,0.5);
+    }
+    button.safe:active {
+        background: rgba(0,80,40,0.88);
+        box-shadow: 0 0 16px rgba(0,255,100,0.4);
+    }
+
+    /* ── PORTRAIT ROTATE PROMPT ── */
+    #rotate-prompt {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.97);
+        z-index: 9999;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        color: #aa00ff;
+        text-align: center;
+        padding: 40px;
+    }
+    #rotate-prompt .rotate-icon { font-size: 3em; }
+    #rotate-prompt p { font-size: 0.65em; letter-spacing: 5px; text-transform: uppercase; color: #660088; }
+    #rotate-prompt button { margin-top: 10px; font-size: 0.55em; padding: 10px 24px; }
+    @media (orientation: portrait) and (max-width: 768px) {
+        #rotate-prompt { display: flex; }
+    }
+
+    /* ── MOBILE (landscape small screens) ── */
+    @media (max-width: 767px) {
+        .info-bar { padding: 10px 10px 0; gap: 6px; }
+        .player-panel { padding: 7px 10px 9px; min-width: 80px; }
+        .player-name-label { font-size: 0.42em; letter-spacing: 3px; }
+        .lives-display { font-size: 1em; letter-spacing: 2px; }
+        #tension-bar-wrap { width: 90px; }
+        #round-display { font-size: 0.42em; letter-spacing: 3px; }
+
+        #message-box { font-size: 1.2em; letter-spacing: 3px; padding: 14px 20px; max-width: 90vw; }
+
+        button { padding: 13px 20px; font-size: 0.8em; letter-spacing: 2px; }
+        .action-row { gap: 8px; }
+        #action-area { padding: 0 10px 12px; gap: 7px; }
+        #action-label { font-size: 0.42em; letter-spacing: 4px; }
+
+        .total-badge { font-size: 1em; letter-spacing: 3px; padding: 4px 12px 5px; }
+        #player-total { bottom: 78px; }
+        #opp-total { top: 78px; }
+
+        #bluff-track { height: 90px; }
+        #bluff-meter { right: 8px; }
+
+        #turn-banner { font-size: 0.85em; letter-spacing: 5px; padding: 12px 24px; }
+
+        #lobby-title { font-size: 2.2em; letter-spacing: 7px; }
+        #lobby-subtitle { font-size: 0.6em; letter-spacing: 5px; }
+        #lobby-buttons { width: 220px; }
+        #online-setup { width: 220px; }
+        #lobby-screen { overflow-y: auto; }
+        #lobby-content { padding: 20px 0; }
+
+        #game-over-title { font-size: 2.6em; letter-spacing: 7px; }
+        #game-over-sub { font-size: 0.55em; letter-spacing: 4px; }
+    }
+
     /* ── ELECTRIC STATIC ── */
     #static-overlay {
         position: fixed; inset: 0;
@@ -507,6 +579,11 @@
 </head>
 <body>
 
+<div id="rotate-prompt">
+    <div class="rotate-icon">⟳</div>
+    <p>Rotate device for best experience</p>
+    <button onclick="document.getElementById('rotate-prompt').style.display='none'">Play anyway</button>
+</div>
 <div id="vignette"></div>
 <div id="shock-overlay"></div>
 <div id="static-overlay"></div>
@@ -591,7 +668,7 @@
             <div id="online-options">
                 <button id="create-room-btn">Create Room</button>
                 <div id="join-row">
-                    <input id="join-code-input" placeholder="Room Code" maxlength="6" autocomplete="off" spellcheck="false">
+                    <input id="join-code-input" placeholder="Room Code" maxlength="6" autocomplete="off" spellcheck="false" autocapitalize="off" autocorrect="off" inputmode="text">
                     <button id="join-room-btn">Join</button>
                 </div>
             </div>

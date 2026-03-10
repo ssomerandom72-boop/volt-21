@@ -26,10 +26,30 @@ camera.lookAt(0, 0.5, -0.5);
 
 const camBase = new THREE.Vector3(0, 7.5, 9.5);
 
+function adjustCamera() {
+    const w = window.innerWidth, h = window.innerHeight;
+    camera.aspect = w / h;
+    if (w < h) {
+        // Portrait: pull back and go more overhead so cards are visible
+        camera.fov = 72;
+        camera.position.set(0, 11, 13);
+        camBase.set(0, 11, 13);
+    } else if (w < 768) {
+        // Landscape mobile: slightly wider FOV
+        camera.fov = 58;
+        camera.position.set(0, 7.5, 9.5);
+        camBase.set(0, 7.5, 9.5);
+    } else {
+        camera.fov = 52;
+        camera.position.set(0, 7.5, 9.5);
+        camBase.set(0, 7.5, 9.5);
+    }
+    camera.lookAt(0, 0.5, -0.5);
+    camera.updateProjectionMatrix();
+}
 window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
+    adjustCamera();
 });
 
 const clock = new THREE.Clock();
