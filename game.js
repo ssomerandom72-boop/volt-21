@@ -1091,6 +1091,9 @@ let _actionResolve = null;
 function waitForAction(who, busted = false) {
     return new Promise(resolve => {
         _actionResolve = resolve;
+        // Re-wire every time so local 2P works even if online mode overwrote these
+        document.getElementById('btn-hit').onclick   = () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('hit'); } };
+        document.getElementById('btn-stand').onclick = () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('stand'); } };
         ui.actionLabel.textContent = busted
             ? `${state[who].name} — BUSTED. Bluff or fold?`
             : `${state[who].name}'s Turn`;
