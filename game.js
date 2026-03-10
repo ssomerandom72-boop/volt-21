@@ -1041,6 +1041,8 @@ async function dealRound() {
     oppPrevCount = 0;
     state.p1.hand = dealHand('p1');
     state.p2.hand = dealHand('p2');
+    state.p1.claim = null;
+    state.p2.claim = null;
     playCardFlip();
     await wait(200);
     playCardFlip();
@@ -1127,16 +1129,16 @@ function waitForClaim() {
     });
 }
 
-function waitForChallenge(who) {
+function waitForShowdownChallenge(loserWho, winnerLabel) {
     return new Promise(resolve => {
         _actionResolve = null;
-        ui.actionLabel.textContent = `${state[who].name}: They have more cards — Call Bluff?`;
+        ui.actionLabel.textContent = `${state[loserWho].name}: ${winnerLabel} — Call Bluff or Accept?`;
         ui.drawRow.classList.add('hidden');
         ui.bluffRow.innerHTML = `
             <button id="btn-do-challenge" class="danger">⚡ Call Bluff</button>
-            <button id="btn-no-challenge" class="safe">Pass</button>`;
-        document.getElementById('btn-do-challenge').onclick = () => { ui.bluffRow.innerHTML = ''; ui.drawRow.classList.remove('hidden'); ui.actionArea.classList.add('hidden'); resolve(true); };
-        document.getElementById('btn-no-challenge').onclick = () => { ui.bluffRow.innerHTML = ''; ui.drawRow.classList.remove('hidden'); ui.actionArea.classList.add('hidden'); resolve(false); };
+            <button id="btn-no-challenge" class="safe">Accept</button>`;
+        document.getElementById('btn-do-challenge').onclick = () => { ui.bluffRow.innerHTML = ''; ui.drawRow.classList.remove('hidden'); ui.actionArea.classList.add('hidden'); resolve('call'); };
+        document.getElementById('btn-no-challenge').onclick = () => { ui.bluffRow.innerHTML = ''; ui.drawRow.classList.remove('hidden'); ui.actionArea.classList.add('hidden'); resolve('accept'); };
         ui.bluffRow.classList.remove('hidden');
         ui.actionArea.classList.remove('hidden');
     });
@@ -1221,46 +1223,10 @@ async function localPlayerTurn(who) {
             playBluffSound();
             state.tension = Math.min(100, state.tension + 15);
             updateUI();
-
             const claim = await waitForClaim();
-            ui.actionArea.classList.add('hidden');
-            ui.handArea.classList.add('hidden');
-            clearCards3D(playerCards3D);
-            playerPrevCount = 0;
-
-            ui.turnBanner.textContent = `${opp.name} — Look now.`;
-            ui.turnBanner.classList.remove('hidden');
-            await wait(1600);
-            ui.turnBanner.classList.add('hidden');
-            renderOppHand(opp.hand, true, '');
-
-            const response = await waitForBluffResponse(oppWho, claim);
-            ui.actionArea.classList.add('hidden');
-
-            if (response === 'fold') {
-                await showMessage(`${opp.name} folds. Round conceded.`, 1600);
-                return { result: 'bluff-win', who };
-            } else {
-                playReveal();
-                renderHand(player.hand, true);
-                renderOppHand(opp.hand, true, '');
-                await showMessage('Cards on the table.', 1400);
-
-                const pt = handTotal(player.hand), ot = handTotal(opp.hand);
-                const blufferWins = !isBust(player.hand) && (isBust(opp.hand) || pt >= ot);
-
-                if (blufferWins) {
-                    await showMessage(`${player.name} had it. ${opp.name} pays!`, 2000);
-                    const useDouble = consumeDoubleShock(who);
-                    await doShock(oppWho, useDouble);
-                    return { result: 'bluff-win', who };
-                } else {
-                    await showMessage(`Bluff called correctly. ${player.name} pays!`, 2000);
-                    const useDouble = consumeDoubleShock(oppWho);
-                    await doShock(who, useDouble);
-                    return { result: 'bluff-loss', who };
-                }
-            }
+            state[who].claim = claim;
+            await showMessage(`${player.name} declares ${claim}.`, 1000);
+            return { result: 'stand', who };
 
         } else if (action === 'fold') {
             await showMessage(`${player.name} folds.`, 1400);
@@ -1276,30 +1242,86 @@ async function resolveRound(r1, r2) {
     const p1Done = r1.result;
     const p2Done = r2 ? r2.result : null;
 
-    if (p1Done === 'bluff-win') { state.p1.roundWins++; updateUI(); return; }
-    if (p1Done === 'bluff-loss' && r2 === null) { state.p2.roundWins++; updateUI(); return; }
     if (p1Done === 'fold') { state.p2.roundWins++; updateUI(); return; }
-    if (p2Done === 'bluff-win') { state.p2.roundWins++; updateUI(); return; }
     if (p2Done === 'fold') { state.p1.roundWins++; updateUI(); return; }
+
+    // Real totals (used if bluff is called)
+    const t1 = handTotal(state.p1.hand), bust1 = isBust(state.p1.hand);
+    const t2 = handTotal(state.p2.hand), bust2 = isBust(state.p2.hand);
+
+    // Declared values: bluffed claim or real total
+    const d1 = state.p1.claim ?? t1;
+    const d2 = state.p2.claim ?? t2;
+
+    // Determine declared winner/loser (treat claimed value as face-value, no bust on bluffed claims)
+    const d1Bust = state.p1.claim ? false : bust1;
+    const d2Bust = state.p2.claim ? false : bust2;
 
     playReveal();
     renderHand(state.p1.hand, true);
-    renderOppHand(state.p2.hand, true, `${state.p2.name}: ${handTotal(state.p2.hand)}`);
-    await showMessage('Showdown.', 1200);
+    renderOppHand(state.p2.hand, true, '');
 
-    const t1 = handTotal(state.p1.hand), bust1 = isBust(state.p1.hand);
-    const t2 = handTotal(state.p2.hand), bust2 = isBust(state.p2.hand);
-    const bj1 = isBlackjack(state.p1.hand), bj2 = isBlackjack(state.p2.hand);
+    const p1Label = state.p1.claim ? `${state.p1.name} claims ${d1}` : `${state.p1.name}: ${d1}`;
+    const p2Label = state.p2.claim ? `${state.p2.name} claims ${d2}` : `${state.p2.name}: ${d2}`;
+    await showMessage(`${p1Label} vs ${p2Label}`, 2000);
 
-    // Challenge phase: both players can call bluff on the other at showdown
-    const p1Called = await waitForChallenge('p1');
-    const p2Called = await waitForChallenge('p2');
+    let declaredWinner = null;
+    if (d1Bust && d2Bust)     { /* both bust declared — fall through to real compare */ }
+    else if (d1Bust)           declaredWinner = 'p2';
+    else if (d2Bust)           declaredWinner = 'p1';
+    else if (d1 > d2)          declaredWinner = 'p1';
+    else if (d2 > d1)          declaredWinner = 'p2';
+    // tie or both-declared-bust: skip challenge, go straight to real compare
 
-    if (bust1 && bust2) {
-        await showMessage('Both bust. Neither wins the round.', 2000);
+    if (declaredWinner) {
+        const declaredLoser = declaredWinner === 'p1' ? 'p2' : 'p1';
+        const winnerDeclLabel = declaredWinner === 'p1' ? p1Label : p2Label;
+        const choice = await waitForShowdownChallenge(declaredLoser, winnerDeclLabel);
+
+        if (choice === 'accept') {
+            // Loser accepts — winner takes round + bonus, no shock
+            state[declaredWinner].roundWins++;
+            updateUI();
+            await showMessage(`${state[declaredLoser].name} accepts. ${state[declaredWinner].name} earns a bonus!`, 1800);
+            await awardBonus(declaredWinner);
+            return;
+        }
+
+        // Called bluff — reveal real values and judge
+        await showMessage('Real hands revealed!', 1200);
+        let realWinner = null;
+        if (bust1 && bust2)  { /* draw */ }
+        else if (bust1)       realWinner = 'p2';
+        else if (bust2)       realWinner = 'p1';
+        else if (t1 > t2)     realWinner = 'p1';
+        else if (t2 > t1)     realWinner = 'p2';
+
+        if (!realWinner) {
+            await showMessage('Both hands tie on the reveal. Draw.', 2000);
+            return;
+        }
+
+        if (realWinner === declaredWinner) {
+            // Winner wasn't bluffing — wrong call, loser pays
+            state[declaredWinner].roundWins++;
+            updateUI();
+            await showMessage(`${state[declaredWinner].name} wasn't bluffing! ${state[declaredLoser].name} pays!`, 2200);
+            const useDouble = consumeDoubleShock(declaredWinner);
+            await doShock(declaredLoser, useDouble);
+            await awardBonus(declaredWinner);
+        } else {
+            // Winner was bluffing — right call, winner pays
+            state[declaredLoser].roundWins++;
+            updateUI();
+            await showMessage(`${state[declaredWinner].name} was bluffing! ${state[declaredLoser].name} wins!`, 2200);
+            const useDouble = consumeDoubleShock(declaredLoser);
+            await doShock(declaredWinner, useDouble);
+        }
         return;
     }
 
+    // No declared winner (tie declared or both declared bust) — straight real compare
+    if (bust1 && bust2) { await showMessage('Both bust. Draw.', 2000); return; }
     let winner = null;
     if (bust1) winner = 'p2';
     else if (bust2) winner = 'p1';
@@ -1308,38 +1330,14 @@ async function resolveRound(r1, r2) {
     else { await showMessage('Tie. Round is a draw.', 1800); return; }
 
     const loser = winner === 'p1' ? 'p2' : 'p1';
-    const winName = state[winner].name;
-    const bjWin = winner === 'p1' ? bj1 : bj2;
-
     state[winner].roundWins++;
     updateUI();
-
-    // Resolve challenges
-    if (p1Called) {
-        if (winner === 'p1') {
-            await showMessage(`${state.p1.name} called it! ${state.p2.name} pays!`, 2000);
-            await doShock('p2', false);
-        } else {
-            await showMessage(`Wrong call! ${state.p1.name} pays!`, 2000);
-            await doShock('p1', false);
-        }
-    }
-    if (p2Called) {
-        if (winner === 'p2') {
-            await showMessage(`${state.p2.name} called it! ${state.p1.name} pays!`, 2000);
-            await doShock('p1', false);
-        } else {
-            await showMessage(`Wrong call! ${state.p2.name} pays!`, 2000);
-            await doShock('p2', false);
-        }
-    }
-
-    if (bjWin) {
-        await showMessage(`${winName} hits BLACKJACK! Shock!`, 2000);
+    if (isBlackjack(state[winner].hand)) {
+        await showMessage(`${state[winner].name} hits BLACKJACK! Shock!`, 2000);
         const useDouble = consumeDoubleShock(winner);
         await doShock(loser, useDouble);
-    } else if (!p1Called && !p2Called) {
-        await showMessage(`${winName} wins the round!`, 1800);
+    } else {
+        await showMessage(`${state[winner].name} wins the round!`, 1800);
         await awardBonus(winner);
     }
 }
