@@ -1,6 +1,8 @@
 // ═══════════════════════════════════════════════
 //  VOLTAGE 21 — Survival Horror Blackjack
+//  Version: 1.1.3
 // ═══════════════════════════════════════════════
+console.log('%c[VOLTAGE 21] Version 1.1.3 loaded', 'color:#aa00ff; font-weight:bold; font-size:1.2em;');
 
 // ── THREE.JS SCENE SETUP ──
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -2548,9 +2550,9 @@ function showLobby() {
                 });
 
                 online.peer.on('connection', conn => {
-                    // Ignore new connection attempts if one is already open or pending
-                    if (online.conn && (online.conn.open || online.conn.peer === conn.peer)) {
-                        console.log('Duplicate or redundant connection attempt ignored from: ' + conn.peer);
+                    // Only block if a connection is ALREADY OPEN. If it's just "pending", allow replacement.
+                    if (online.conn && online.conn.open) {
+                        console.log('Ignoring connection from ' + conn.peer + ' because already connected to ' + online.conn.peer);
                         return;
                     }
 
@@ -2561,7 +2563,7 @@ function showLobby() {
                         if (conn.open) return;
                         console.error('Handshake with guest failed (timeout)');
                         document.getElementById('lobby-status').textContent = 'Handshake stalled. Check for strict NAT.';
-                    }, 20000);
+                    }, 25000);
 
                     // Track ICE Connection State
                     const peerConnection = conn.peerConnection;
@@ -2569,7 +2571,7 @@ function showLobby() {
                         peerConnection.oniceconnectionstatechange = () => {
                             console.log('ICE state (Host): ' + peerConnection.iceConnectionState);
                             if (peerConnection.iceConnectionState === 'failed') {
-                                document.getElementById('lobby-status').textContent = 'ICE Negotiation Failed. Use a different network.';
+                                document.getElementById('lobby-status').textContent = 'Negotiation Failed. Try a mobile hotspot.';
                             }
                         };
                     }
@@ -2624,22 +2626,22 @@ function showLobby() {
                 
                 online.peer.on('open', (id) => {
                     console.log('Guest Peer ID:', id);
-                    document.getElementById('lobby-status').textContent = 'Connecting to room: ' + code;
+                    document.getElementById('lobby-status').textContent = 'ESTABLISHING SIGNAL...';
                     
                     // Small delay to ensure host is registered
                     setTimeout(() => {
                         console.log('Attempting PeerJS connection to ' + code);
                         const conn = online.peer.connect(code, {
-                            metadata: { version: '1.0.9' }
+                            metadata: { version: '1.1.3' }
                         });
                         online.conn = conn;
                         
                         const timeout = setTimeout(() => {
                             if (conn.open) return;
                             console.error('Handshake with host failed (timeout)');
-                            document.getElementById('lobby-status').textContent = 'Handshake stalled. Host might be blocked.';
+                            document.getElementById('lobby-status').textContent = 'Handshake stalled. Room code correct?';
                             btn.disabled = false;
-                        }, 20000);
+                        }, 25000);
                         
                         conn.on('open', () => {
                             clearTimeout(timeout);
@@ -2656,7 +2658,7 @@ function showLobby() {
                             console.error('Connection error (guest side):', err);
                             document.getElementById('lobby-status').textContent = 'Connect failed: ' + err.type;
                         });
-                    }, 300);
+                    }, 500);
                 });
 
                 online.peer.on('error', err => {
