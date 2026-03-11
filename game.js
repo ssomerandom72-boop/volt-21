@@ -1921,39 +1921,15 @@ function showLobby() {
         const onlineOpts  = document.getElementById('online-options');
         const roomDisplay = document.getElementById('room-code-display');
 
-        // Ensure lobby buttons are stacked
-        if (lobbyBtns) lobbyBtns.style.cssText = 'display:flex; flex-direction:column; align-items:center;';
-
         document.getElementById('mode-local').onclick = () => {
-            console.log('Local mode clicked');
             gameMode = 'local'; lobby.classList.add('hidden'); resolve('local');
         };
 
-        let storyBtn = document.getElementById('mode-story');
-        if (!storyBtn && lobbyBtns) {
-            console.log('Creating story button dynamically...');
-            storyBtn = document.createElement('button');
-            storyBtn.id = 'mode-story';
-            storyBtn.textContent = 'STORY MODE';
-            // Insert after local button if possible
-            const localBtn = document.getElementById('mode-local');
-            if (localBtn && localBtn.nextSibling) {
-                lobbyBtns.insertBefore(storyBtn, localBtn.nextSibling);
-            } else {
-                lobbyBtns.appendChild(storyBtn);
-            }
-        }
-
-        if (storyBtn) {
-            storyBtn.style.cssText = 'width:320px; border-color:#ff00ff; color:#ff00ff; box-shadow:0 0 15px #ff00ff; margin:15px 0;';
-            storyBtn.onclick = () => {
-                console.log('Story mode clicked');
-                gameMode = 'story'; lobby.classList.add('hidden'); resolve('story');
-            };
-        }
+        document.getElementById('mode-story').onclick = () => {
+            gameMode = 'story'; lobby.classList.add('hidden'); resolve('story');
+        };
 
         document.getElementById('mode-online').onclick = () => {
-            console.log('Online mode clicked');
             lobbyBtns.classList.add('hidden'); onlineSetup.classList.remove('hidden');
         };
 
