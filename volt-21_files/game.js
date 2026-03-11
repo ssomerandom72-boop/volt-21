@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════
 //  VOLTAGE 21 — Survival Horror Blackjack
-//  Version: 1.2.1
+//  Version: 1.3.0 (CLEAN SLATE)
 // ═══════════════════════════════════════════════
-console.log('%c[VOLTAGE 21] Version 1.2.1 loaded', 'color:#aa00ff; font-weight:bold; font-size:1.2em;');
+console.log('%c[VOLTAGE 21] Version 1.3.0 loaded', 'color:#00ffff; font-weight:bold; font-size:1.4em;');
 
 // ── THREE.JS SCENE SETUP ──
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -1154,33 +1154,7 @@ const online = {
     roomCode: '', 
     _resolvers: {},
     config: {
-        debug: 3,
-        config: {
-            'iceServers': [
-                { 'urls': 'stun:stun.l.google.com:19302' },
-                { 'urls': 'stun:stun1.l.google.com:19302' },
-                { 'urls': 'stun:stun2.l.google.com:19302' },
-                { 'urls': 'stun:stun3.l.google.com:19302' },
-                { 'urls': 'stun:stun4.l.google.com:19302' },
-                { 'urls': 'stun:openrelay.metered.ca:80' },
-                {
-                    'urls': 'turn:openrelay.metered.ca:80',
-                    'username': 'openrelayproject',
-                    'credential': 'openrelayproject'
-                },
-                {
-                    'urls': 'turn:openrelay.metered.ca:443',
-                    'username': 'openrelayproject',
-                    'credential': 'openrelayproject'
-                },
-                {
-                    'urls': 'turn:openrelay.metered.ca:443?transport=tcp',
-                    'username': 'openrelayproject',
-                    'credential': 'openrelayproject'
-                }
-            ],
-            'iceCandidatePoolSize': 10
-        }
+        debug: 3
     }
 };
 let state = {};
@@ -2091,7 +2065,7 @@ async function runLocalGame() {
 
 // ── ONLINE NETWORKING ──
 function generateCode() {
-    return Array.from({ length: 7 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 33)]).join('');
+    return Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 33)]).join('');
 }
 
 function sendToGuest(data) { if (online.conn?.open) online.conn.send(data); }
