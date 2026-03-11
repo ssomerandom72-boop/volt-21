@@ -818,6 +818,7 @@ const STORY_EVENTS = [
 let storyTriggered = new Set();
 
 function checkStoryEvents() {
+    if (!state || !state.p1) return;
     for (const event of STORY_EVENTS) {
         if (storyTriggered.has(event.id)) continue;
         if (event.trigger(state)) {
