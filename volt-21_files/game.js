@@ -2508,24 +2508,39 @@ function showLobby() {
             const code = generateCode();
             online.roomCode = code; online.isHost = true;
             try {
+                console.log('Initializing Peer with code:', code);
+                // Use default PeerJS cloud server
                 online.peer = new Peer(code);
-                online.peer.on('open', () => {
+                
+                online.peer.on('open', (id) => {
+                    console.log('Peer server connection open. ID:', id);
                     onlineOpts.classList.add('hidden'); roomDisplay.classList.remove('hidden');
                     document.getElementById('room-code-text').textContent = code;
-                    document.getElementById('lobby-status').textContent = 'Waiting...';
+                    document.getElementById('lobby-status').textContent = 'Waiting for opponent...';
                 });
+
                 online.peer.on('connection', conn => {
+                    console.log('Incoming connection from guest!');
                     online.conn = conn;
                     conn.on('open', () => {
+                        console.log('Data connection established with guest');
                         document.getElementById('lobby-status').textContent = 'Connected!';
                         gameMode = 'online';
                         conn.on('data', handleGuestMessage);
                         setTimeout(() => { lobby.classList.add('hidden'); resolve('online-host'); }, 700);
                     });
+                    conn.on('error', err => {
+                        console.error('Guest connection error:', err);
+                        document.getElementById('lobby-status').textContent = 'Guest error: ' + err.type;
+                    });
                 });
+
                 online.peer.on('error', err => {
-                    console.error('PeerJS error:', err);
-                    document.getElementById('lobby-status').textContent = 'Peer error: ' + err.type;
+                    console.error('PeerJS server error:', err);
+                    document.getElementById('lobby-status').textContent = 'Server error: ' + err.type;
+                    if (err.type === 'unavailable-id') {
+                        document.getElementById('lobby-status').textContent = 'Code taken. Try again.';
+                    }
                 });
             } catch (e) {
                 console.error('Peer creation failed:', e);
@@ -2538,20 +2553,32 @@ function showLobby() {
             if (!code) return;
             online.isHost = false;
             try {
+                console.log('Initializing Guest Peer...');
                 online.peer = new Peer();
-                online.peer.on('open', () => {
+                
+                online.peer.on('open', (id) => {
+                    console.log('Guest Peer ID:', id);
+                    console.log('Attempting to connect to host:', code);
                     const conn = online.peer.connect(code, { reliable: true });
                     online.conn = conn;
+                    
                     conn.on('open', () => {
+                        console.log('Connection to host established!');
                         document.getElementById('lobby-status').textContent = 'Connected!';
                         gameMode = 'online';
                         conn.on('data', handleHostMessage);
                         setTimeout(() => { lobby.classList.add('hidden'); resolve('online-guest'); }, 700);
                     });
+                    
                     conn.on('error', err => {
-                        console.error('Connection error:', err);
-                        document.getElementById('lobby-status').textContent = 'Could not connect.';
+                        console.error('Connection error to host:', err);
+                        document.getElementById('lobby-status').textContent = 'Connection failed: ' + err.type;
                     });
+                });
+
+                online.peer.on('error', err => {
+                    console.error('Guest Peer Server error:', err);
+                    document.getElementById('lobby-status').textContent = 'Peer error: ' + err.type;
                 });
             } catch (e) {
                 console.error('Peer creation failed:', e);
