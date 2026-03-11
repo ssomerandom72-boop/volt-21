@@ -1130,7 +1130,17 @@ function renderOppHand(hand, showAll = false, statusText = '') {
 }
 
 // ── SHOCK ──
-async function doShock(who, double = false) {
+// ── AUDIO ──
+let bgMusic = null;
+function startMusic() {
+    if (bgMusic) return; // Already playing
+    bgMusic = new Audio('1Askim Cok Pardon (Instrumental Slowed).mp3');
+    bgMusic.loop = true;
+    bgMusic.volume = 0.4;
+    bgMusic.play().catch(e => console.log("Music autoplay blocked, will play on next interaction"));
+}
+
+async function doShock(who, isDouble = false) {
     initAudio();
     const lives = double ? 2 : 1;
 
@@ -2137,6 +2147,7 @@ async function runStoryMode() {
 async function startGame() {
     injectBonusUI();
     const mode = await showLobby();
+    startMusic();
 
     if (mode === 'story') {
         await runStoryMode();
