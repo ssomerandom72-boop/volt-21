@@ -2145,6 +2145,13 @@ function startGuestTurnUI(hand) {
     document.getElementById('btn-hit').onclick   = () => send('hit');
     document.getElementById('btn-stand').onclick = () => send('stand');
     document.getElementById('btn-fold').onclick  = () => send('fold');
+    
+    const ocBtn = document.getElementById('btn-overcharge');
+    if (ocBtn) {
+        ocBtn.disabled = isBust(hand) || state.p2.lives <= 1;
+        ocBtn.onclick = () => send('overcharge');
+    }
+
     document.getElementById('btn-bluff').onclick = async () => {
         state.p2.isBluffing = true;
         ui.actionArea.classList.add('hidden');
@@ -2185,6 +2192,24 @@ async function onlineHostPlayerTurn() {
             renderHand(state.p1.hand, true);
             sendToGuest({ type: 'oppAction', action: 'hit' });
 
+        } else if (action === 'overcharge') {
+            await showMessage("⚡ OVERCHARGING ⚡", 1000);
+            await doShock('p1', false);
+            // Safe draw logic
+            const current = handTotal(state.p1.hand);
+            const room = 21 - current;
+            let cardIdx = state.deck.findIndex(c => cardValue(c) <= room);
+            if (cardIdx === -1) {
+                let lowestVal = 99;
+                state.deck.forEach((c, i) => { if (cardValue(c) < lowestVal) { lowestVal = cardValue(c); cardIdx = i; } });
+            }
+            const card = state.deck.splice(cardIdx, 1)[0];
+            state.p1.hand.push(card);
+            playCardFlip();
+            renderHand(state.p1.hand, true);
+            sendToGuest({ type: 'oppAction', action: 'hit' }); // Guest sees it as a hit
+            broadcastState();
+
         } else if (action === 'stand') {
             if (busted) {
                 await showMessage('You bust!', 1400);
@@ -2195,6 +2220,7 @@ async function onlineHostPlayerTurn() {
 
         } else if (action === 'bluff') {
             state.p1.isBluffing = true;
+            broadcastState();
             playBluffSound();
             state.tension = Math.min(100, state.tension + 15);
             const claim = await waitForClaim();
@@ -2269,25 +2295,49 @@ async function onlineGuestPlayerTurn() {
                 return { result: 'bust', who: 'p2' };
             }
 
+        } else if (action === 'overcharge') {
+            await showMessage("Opponent OVERCHARGING...", 1000);
+            await doShock('p2', false);
+            // Safe draw logic for guest (controlled by host)
+            const current = handTotal(state.p2.hand);
+            const room = 21 - current;
+            let cardIdx = state.deck.findIndex(c => cardValue(c) <= room);
+            if (cardIdx === -1) {
+                let lowestVal = 99;
+                state.deck.forEach((c, i) => { if (cardValue(c) < lowestVal) { lowestVal = cardValue(c); cardIdx = i; } });
+            }
+            const card = state.deck.splice(cardIdx, 1)[0];
+            state.p2.hand.push(card);
+            broadcastState();
+            sendToGuest({ type: 'yourTurn', hand: state.p2.hand, s: { p1lives: state.p1.lives, p2lives: state.p2.lives, p1wins: state.p1.roundWins, p2wins: state.p2.roundWins, p1bonus: state.p1.bonusCards, p2bonus: state.p2.bonusCards, round: state.round, tension: state.tension } });
+
         } else if (action === 'stand') {
             await showMessage('Opponent stands.', 700);
             return { result: 'stand', who: 'p2' };
 
         } else if (action === 'bluff') {
+            state.p2.isBluffing = true;
+            broadcastState();
             playBluffSound();
             state.tension = Math.min(100, state.tension + 15);
             const guestClaim = actionObj.claim || 20;
             sendToGuest({ type: 'message', text: 'You bluffed! Waiting...', duration: 1000 });
 
             const response = await waitForBluffResponse('p1', guestClaim);
+            state.p2.isBluffing = false; // Bluff over once decision starts or ends? 
+            // Actually, keep it until decision is made
             ui.actionArea.classList.add('hidden');
             sendToGuest({ type: 'message', text: response === 'call' ? 'Called!' : 'Folded!', duration: 1000 });
 
             if (response === 'fold') {
+                state.p2.isBluffing = false;
+                broadcastState();
                 await showMessage(`You fold. Round conceded.`, 1600);
                 sendToGuest({ type: 'message', text: `${state.p2.name} folds. Round conceded.`, duration: 1600 });
                 return { result: 'bluff-win', who: 'p2' };
             } else {
+                state.p2.isBluffing = false;
+                broadcastState();
                 sendToGuest({ type: 'reveal', hostHand: state.p1.hand, guestHand: state.p2.hand });
                 playReveal();
                 renderOppHand(state.p2.hand, true, '');
