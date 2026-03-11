@@ -1533,6 +1533,94 @@ function showGameOver(winner) {
     screen.classList.remove('hidden');
 }
 
+// ── DEALER AI ──
+function getDealerAIAction() {
+    const hand = state.p2.hand;
+    const total = handTotal(hand);
+    
+    // If busted, always bluff or fold
+    if (total > 21) {
+        // 70% chance to bluff if total is close to 21, otherwise fold
+        if (total <= 25 && Math.random() < 0.7) {
+            return { action: 'bluff', claim: 18 + Math.floor(Math.random() * 4) };
+        }
+        return { action: 'fold' };
+    }
+
+    // Hit on 16 or less
+    if (total <= 16) return { action: 'hit' };
+    
+    // Stand on 17+
+    return { action: 'stand' };
+}
+
+async function runAIGame() {
+    state.p2.name = "DEALER BOT";
+    updateUI();
+
+    while (true) {
+        await dealRound();
+
+        // Player Turn
+        const r1 = await localPlayerTurn('p1');
+        ui.handArea.classList.add('hidden');
+        ui.oppArea.classList.add('hidden');
+        clearCards3D(playerCards3D);
+        clearCards3D(oppCards3D);
+        playerPrevCount = 0;
+        oppPrevCount = 0;
+
+        let r2 = { result: 'stand', who: 'p2' };
+        const p1EarlyEnd = ['bluff-win','bluff-loss','fold'].includes(r1.result);
+        
+        if (!p1EarlyEnd) {
+            // Dealer AI Turn
+            await showMessage("Dealer's Turn...", 1200);
+            renderHand(state.p1.hand, true);
+            renderOppHand(state.p2.hand, false, '');
+
+            let dealerDone = false;
+            while (!dealerDone) {
+                await wait(1000);
+                const ai = getDealerAIAction();
+                
+                if (ai.action === 'hit') {
+                    state.p2.hand.push(drawCard());
+                    playCardFlip();
+                    renderOppHand(state.p2.hand, false, 'Dealer hits...');
+                    await wait(800);
+                } else if (ai.action === 'stand') {
+                    await showMessage("Dealer stands.", 1000);
+                    r2 = { result: 'stand', who: 'p2' };
+                    dealerDone = true;
+                } else if (ai.action === 'bluff') {
+                    state.tension = Math.min(100, state.tension + 15);
+                    state.p2.claim = ai.claim;
+                    await showMessage(`Dealer declares ${ai.claim}.`, 1500);
+                    r2 = { result: 'stand', who: 'p2' };
+                    dealerDone = true;
+                } else if (ai.action === 'fold') {
+                    await showMessage("Dealer folds.", 1200);
+                    const useDouble = consumeDoubleShock('p1');
+                    await doShock('p2', useDouble);
+                    r2 = { result: 'fold', who: 'p2' };
+                    dealerDone = true;
+                }
+            }
+        }
+
+        await resolveRound(r1, r2);
+
+        const check = checkGameOver();
+        if (check.over) { showGameOver(check.winner); return; }
+
+        state.round++;
+        state.tension = Math.min(100, state.tension + 8);
+        updateUI();
+        await showMessage(`ROUND ${state.round}`, 1600);
+    }
+}
+
 // ── LOCAL GAME LOOP ──
 async function runLocalGame() {
     while (true) {
@@ -2038,7 +2126,7 @@ async function runStoryMode() {
     ui.storyScreen.classList.add('hidden');
     resetState(); updateUI();
     await showMessage('VOLTAGE 21', 1600);
-    await runLocalGame();
+    await runAIGame();
 }
 
 async function startGame() {
