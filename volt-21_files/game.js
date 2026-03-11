@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════
 //  VOLTAGE 21 — Survival Horror Blackjack
-//  Version: 1.2.0
+//  Version: 1.2.1
 // ═══════════════════════════════════════════════
-console.log('%c[VOLTAGE 21] Version 1.2.0 loaded', 'color:#aa00ff; font-weight:bold; font-size:1.2em;');
+console.log('%c[VOLTAGE 21] Version 1.2.1 loaded', 'color:#aa00ff; font-weight:bold; font-size:1.2em;');
 
 // ── THREE.JS SCENE SETUP ──
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -1161,7 +1161,23 @@ const online = {
                 { 'urls': 'stun:stun1.l.google.com:19302' },
                 { 'urls': 'stun:stun2.l.google.com:19302' },
                 { 'urls': 'stun:stun3.l.google.com:19302' },
-                { 'urls': 'stun:stun4.l.google.com:19302' }
+                { 'urls': 'stun:stun4.l.google.com:19302' },
+                { 'urls': 'stun:openrelay.metered.ca:80' },
+                {
+                    'urls': 'turn:openrelay.metered.ca:80',
+                    'username': 'openrelayproject',
+                    'credential': 'openrelayproject'
+                },
+                {
+                    'urls': 'turn:openrelay.metered.ca:443',
+                    'username': 'openrelayproject',
+                    'credential': 'openrelayproject'
+                },
+                {
+                    'urls': 'turn:openrelay.metered.ca:443?transport=tcp',
+                    'username': 'openrelayproject',
+                    'credential': 'openrelayproject'
+                }
             ],
             'iceCandidatePoolSize': 10
         }
