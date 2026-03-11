@@ -1667,7 +1667,28 @@ async function localPlayerTurn(who) {
         } else if (action === 'overcharge') {
             await showMessage("⚡ OVERCHARGING ⚡", 1000);
             await doShock(who, false); // Take 1 shock
-            player.hand.push(drawCard());
+            
+            // Logic for a "Safe Draw":
+            // 1. Calculate how much room we have before 21
+            const current = handTotal(player.hand);
+            const room = 21 - current;
+            
+            // 2. Look for a card in the deck that fits the room
+            let cardIdx = state.deck.findIndex(c => cardValue(c) <= room);
+            
+            // 3. If no safe card exists, just take the lowest value card available
+            if (cardIdx === -1) {
+                let lowestVal = 99;
+                state.deck.forEach((c, i) => {
+                    const v = cardValue(c);
+                    if (v < lowestVal) { lowestVal = v; cardIdx = i; }
+                });
+            }
+            
+            // 4. Draw that specific card
+            const card = state.deck.splice(cardIdx, 1)[0];
+            player.hand.push(card);
+            
             playCardFlip();
             renderHand(player.hand, true);
             
