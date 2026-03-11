@@ -111,6 +111,7 @@
             <div id="draw-row">
                 <button id="btn-hit">HIT</button>
                 <button id="btn-stand">STAND</button>
+                <button id="btn-overcharge" style="border-color: #ffaa00; color: #ffaa00;">⚡ OVERCHARGE</button>
             </div>
             <div id="bluff-row" class="hidden">
                 <button id="btn-bluff" class="danger">⚡ BLUFF</button>
@@ -159,6 +160,23 @@
         </div>
     </div>
 
+    <!-- Interaction Screen -->
+    <div id="interaction-screen" class="overlay-screen hidden" style="background: rgba(0,0,0,0.85);">
+        <div id="interaction-content" style="max-width: 600px; padding: 30px; border: 1px solid #aa00ff; background: #05000a;">
+            <p id="interaction-prompt" style="font-size: 1.2rem; margin-bottom: 30px;"></p>
+            <div id="interaction-choices" style="display: flex; flex-direction: column; gap: 15px;"></div>
+        </div>
+    </div>
+
+    <!-- Lore Screen -->
+    <div id="lore-screen" class="overlay-screen hidden" style="background: rgba(0,0,0,0.9); z-index: 200;">
+        <div id="lore-content" style="max-width: 500px; padding: 40px; border: 1px solid #00ffaa; background: #000; color: #00ffaa; font-family: monospace; text-align: left; box-shadow: 0 0 30px rgba(0,255,170,0.2);">
+            <h2 style="border-bottom: 1px solid #00ffaa; padding-bottom: 10px;">INTERCEPTED LOG</h2>
+            <p id="lore-text" style="font-size: 1rem; line-height: 1.6; margin: 20px 0; min-height: 150px;"></p>
+            <button id="lore-close" style="border-color: #00ffaa; color: #00ffaa; width: 100%;">CLOSE ENCRYPTED FILE</button>
+        </div>
+    </div>
+
     <!-- Game Over Screen -->
     <div id="game-over-screen" class="overlay-screen hidden">
         <h1 id="game-over-title" style="font-size: 4rem;">FLATLINE</h1>
@@ -166,6 +184,6 @@
         <button id="btn-restart">RESTART SIMULATION</button>
     </div>
 
-    <script src="game.js?v=1.0.3"></script>
+    <script src="game.js?v=1.0.4"></script>
 </body>
 </html>

@@ -63,6 +63,7 @@ mainLight.position.set(0, 5.5, 0);
 mainLight.castShadow = true;
 mainLight.shadow.mapSize.width = 1024;
 mainLight.shadow.mapSize.height = 1024;
+mainLight.shadow.bias = -0.005; // Smoother shadows on the table
 scene.add(mainLight);
 
 const fillLeft = new THREE.PointLight(0x6600cc, 2.5, 14);
@@ -77,6 +78,50 @@ scene.add(fillRight);
 const oppLight = new THREE.PointLight(0x9944ff, 3.5, 10);
 oppLight.position.set(0, 3.5, -2.5);
 scene.add(oppLight);
+
+// Hanging light fixture with physics-style swinging
+const fixtureGroup = new THREE.Group();
+let swingAngle = 0;
+let swingSpeed = 0;
+let swingTarget = 0;
+
+const wireGeo = new THREE.CylinderGeometry(0.008, 0.008, 3.0, 6);
+const wireMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+const wire = new THREE.Mesh(wireGeo, wireMat);
+wire.position.set(0, 1.5, 0); // Rotate around top
+fixtureGroup.add(wire);
+
+const shadeGroup = new THREE.Group();
+shadeGroup.position.set(0, 0, 0);
+
+const shadeGeo = new THREE.CylinderGeometry(0.18, 0.28, 0.22, 12, 1, true);
+const shadeMat = new THREE.MeshStandardMaterial({ color: 0x0a000f, roughness: 0.6, metalness: 0.5, side: THREE.DoubleSide });
+const shade = new THREE.Mesh(shadeGeo, shadeMat);
+shade.position.set(0, -0.1, 0);
+shadeGroup.add(shade);
+
+const bulbGeo = new THREE.SphereGeometry(0.07, 8, 8);
+const bulbMat = new THREE.MeshStandardMaterial({ color: 0xaa88ff, emissive: 0xaa44ff, emissiveIntensity: 2.0 });
+const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+bulb.position.set(0, -0.15, 0);
+shadeGroup.add(bulb);
+
+fixtureGroup.add(shadeGroup);
+fixtureGroup.position.set(0, 7.0, 0);
+scene.add(fixtureGroup);
+
+function updateSwingingLight(dt) {
+    if (Math.random() < 0.005) swingTarget = (Math.random() - 0.5) * 0.15;
+    const force = (swingTarget - swingAngle) * 0.5;
+    swingSpeed += force * dt;
+    swingSpeed *= 0.985;
+    swingAngle += swingSpeed;
+    fixtureGroup.rotation.z = swingAngle;
+    fixtureGroup.rotation.x = Math.sin(Date.now() * 0.001) * 0.02;
+    const worldPos = new THREE.Vector3();
+    bulb.getWorldPosition(worldPos);
+    mainLight.position.copy(worldPos);
+}
 
 // ── FLICKER STATE ──
 let flickerTimer = 0;
@@ -168,30 +213,6 @@ const backWall = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), wallMat);
 backWall.position.set(0, 5, -9);
 scene.add(backWall);
 
-// Hanging light fixture
-const fixtureGroup = new THREE.Group();
-
-const wireGeo = new THREE.CylinderGeometry(0.008, 0.008, 3.0, 6);
-const wireMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-const wire = new THREE.Mesh(wireGeo, wireMat);
-wire.position.set(0, 1.0, 0);
-fixtureGroup.add(wire);
-
-const shadeGeo = new THREE.CylinderGeometry(0.18, 0.28, 0.22, 12, 1, true);
-const shadeMat = new THREE.MeshStandardMaterial({ color: 0x0a000f, roughness: 0.6, metalness: 0.5, side: THREE.DoubleSide });
-const shade = new THREE.Mesh(shadeGeo, shadeMat);
-shade.position.set(0, -0.55, 0);
-fixtureGroup.add(shade);
-
-const bulbGeo = new THREE.SphereGeometry(0.07, 8, 8);
-const bulbMat = new THREE.MeshStandardMaterial({ color: 0xaa88ff, emissive: 0xaa44ff, emissiveIntensity: 2.0 });
-const bulb = new THREE.Mesh(bulbGeo, bulbMat);
-bulb.position.set(0, -0.6, 0);
-fixtureGroup.add(bulb);
-
-fixtureGroup.position.set(0, 7.0, 0);
-scene.add(fixtureGroup);
-
 // ── ELECTRIC DEVICE (center of table) ──
 const DEVICE_POS = new THREE.Vector3(0, 0, 0);
 const deviceGroup = new THREE.Group();
@@ -236,6 +257,76 @@ deviceGroup.add(deviceLight);
 
 deviceGroup.position.copy(DEVICE_POS);
 scene.add(deviceGroup);
+
+// ── DEALER MESH ──
+const dealerGroup = new THREE.Group();
+dealerGroup.position.set(0, 0, -4.5);
+scene.add(dealerGroup);
+
+const dealerBodyMat = new THREE.MeshStandardMaterial({ color: 0x05000a, roughness: 0.9 });
+const dealerBody = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.8, 2.2, 8), dealerBodyMat);
+dealerBody.position.y = 1.1;
+dealerGroup.add(dealerBody);
+
+// Procedural low-poly mask
+const maskGroup = new THREE.Group();
+maskGroup.position.set(0, 2.4, 0.6);
+dealerGroup.add(maskGroup);
+
+const maskMat = new THREE.MeshStandardMaterial({ 
+    color: 0x110022, 
+    emissive: 0xaa00ff, 
+    emissiveIntensity: 0.5, 
+    roughness: 0.3,
+    metalness: 0.8
+});
+
+function createMask() {
+    const maskGeo = new THREE.IcosahedronGeometry(0.35, 1);
+    const maskMesh = new THREE.Mesh(maskGeo, maskMat);
+    maskGroup.add(maskMesh);
+    
+    // Add glowing "eyes"
+    const eyeGeo = new THREE.BoxGeometry(0.15, 0.02, 0.05);
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeL.position.set(-0.12, 0.05, 0.32);
+    maskGroup.add(eyeL);
+    
+    const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeR.position.set(0.12, 0.05, 0.32);
+    maskGroup.add(eyeR);
+    
+    return maskMesh;
+}
+const dealerMask = createMask();
+
+function updateDealerVisuals(dt) {
+    if (!dealerGroup) return;
+    
+    // Subtle breathing
+    dealerGroup.position.y = Math.sin(Date.now() * 0.0015) * 0.05;
+    
+    // Audio-reactive mask
+    if (audioAnalyser) {
+        const data = new Uint8Array(audioAnalyser.frequencyBinCount);
+        audioAnalyser.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b) / data.length;
+        const s = 1 + avg / 120;
+        maskGroup.scale.set(s, s, s);
+        maskMat.emissiveIntensity = 0.5 + avg / 50;
+    }
+    
+    // "Tell" vibration when bluffing
+    if (state && state.p2 && state.p2.isBluffing) {
+        maskGroup.position.x = (Math.random() - 0.5) * 0.02;
+        maskGroup.position.y = 2.4 + (Math.random() - 0.5) * 0.02;
+        maskMat.emissive.setHex(0xff0000); // Shift to red
+    } else {
+        maskGroup.position.x = 0;
+        maskMat.emissive.setHex(0xaa00ff);
+    }
+}
 
 // ── SIDE ELECTRODE STANDS + CABLES ──
 const standMat2   = new THREE.MeshStandardMaterial({ color: 0x0e0e0e, metalness: 0.88, roughness: 0.22 });
@@ -405,6 +496,62 @@ function makeFaceTexture(rank, suit) {
     const tex = new THREE.CanvasTexture(canvas);
     faceTexCache.set(key, tex);
     return tex;
+}
+
+// ── CARD DESTRUCTION ──
+const particles = [];
+function createAshParticles(pos, count = 15) {
+    const geo = new THREE.PlaneGeometry(0.05, 0.05);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+    
+    for (let i = 0; i < count; i++) {
+        const p = new THREE.Mesh(geo, mat);
+        p.position.copy(pos);
+        p.position.x += (Math.random() - 0.5) * 0.5;
+        p.position.z += (Math.random() - 0.5) * 0.5;
+        
+        const vel = new THREE.Vector3((Math.random() - 0.5) * 0.5, 0.5 + Math.random() * 1.5, (Math.random() - 0.5) * 0.5);
+        const rot = new THREE.Vector3(Math.random() * 10, Math.random() * 10, Math.random() * 10);
+        
+        scene.add(p);
+        particles.push({
+            mesh: p,
+            vel,
+            rot,
+            life: 1.0,
+            update(dt) {
+                this.life -= dt * 0.6;
+                this.mesh.position.addScaledVector(this.vel, dt);
+                this.mesh.rotation.x += this.rot.x * dt;
+                this.mesh.rotation.y += this.rot.y * dt;
+                this.mesh.material.opacity = this.life;
+                if (this.life <= 0) {
+                    scene.remove(this.mesh);
+                    return true;
+                }
+                return false;
+            }
+        });
+    }
+}
+
+async function burnCards(cards3D) {
+    for (const mesh of cards3D) {
+        // Simple scale down + particles
+        createAshParticles(mesh.position, 10);
+        tweens.push({
+            elapsed: 0,
+            duration: 0.5,
+            update(dt) {
+                this.elapsed += dt;
+                const t = this.elapsed / this.duration;
+                mesh.scale.set(1 - t, 1 - t, 1 - t);
+                mesh.rotation.z += dt * 5;
+                return t >= 1;
+            }
+        });
+    }
+    await wait(600);
 }
 
 // ── 3D CARD MANAGEMENT ──
@@ -586,11 +733,91 @@ function triggerShock3D(who, double) {
 
 // ── AUDIO ──
 let audioCtx = null;
+let bgMusic = null;
+let bgMusicSource = null;
+let musicFilter = null;
+let audioAnalyser = null;
+let heartbeatOsc = null;
+let heartbeatGain = null;
+
 function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Setup Filter for music
+        musicFilter = audioCtx.createBiquadFilter();
+        musicFilter.type = 'lowpass';
+        musicFilter.frequency.setValueAtTime(20000, audioCtx.currentTime);
+        musicFilter.connect(audioCtx.destination);
+
+        // Setup Analyser for visual effects
+        audioAnalyser = audioCtx.createAnalyser();
+        audioAnalyser.fftSize = 256;
+        musicFilter.connect(audioAnalyser);
+
         loadGrunts();
     }
+}
+
+function startMusic() {
+    if (bgMusic) return;
+    initAudio();
+    bgMusic = new Audio('1Askim Cok Pardon (Instrumental Slowed).mp3');
+    bgMusic.loop = true;
+    bgMusic.volume = 0.4;
+    
+    // Connect Audio element to WebAudio graph
+    bgMusicSource = audioCtx.createMediaElementSource(bgMusic);
+    bgMusicSource.connect(musicFilter);
+    
+    bgMusic.play().catch(e => console.log("Music autoplay blocked"));
+}
+
+function updateAudioAtmosphere() {
+    if (!audioCtx || !state || !state.p1) return;
+    
+    // Low-pass filter logic: muffle when dealer is thinking
+    const targetFreq = (state.phase === 'opponent' || state.phase === 'dealer-thinking') ? 800 : 20000;
+    musicFilter.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.5);
+
+    // Heartbeat logic
+    updateHeartbeat();
+}
+
+let lastHeartbeatTime = 0;
+function updateHeartbeat() {
+    if (!audioCtx || !state.p1) return;
+    
+    const p1Total = handTotal(state.p1.hand);
+    const danger = Math.max(0, p1Total - 15) / 6; // 0 to 1 as we approach 21
+    const tension = state.tension / 100;
+    const intensity = Math.max(danger, tension);
+    
+    const bpm = 60 + intensity * 100; // 60 to 160 bpm
+    const interval = 60 / bpm;
+    
+    if (audioCtx.currentTime - lastHeartbeatTime > interval) {
+        playHeartbeat(intensity);
+        lastHeartbeatTime = audioCtx.currentTime;
+    }
+}
+
+function playHeartbeat(intensity) {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(60, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+    
+    g.gain.setValueAtTime(0.3 * intensity, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+    
+    osc.connect(g);
+    g.connect(audioCtx.destination);
+    
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.15);
 }
 
 function playShock() {
@@ -904,6 +1131,9 @@ function resetState() {
             bonusCards: [], name: 'Player 2',
             nextHandRig: null,
             shieldNext: false,
+            aggression: 1.0,
+            bluffFrequency: 0.7,
+            isBluffing: false,
         },
         tension: 0,
         phase: 'deal',
@@ -915,6 +1145,37 @@ function resetState() {
     storyTriggered.clear();
     clearCards3D(playerCards3D);
     clearCards3D(oppCards3D);
+}
+
+// ── LORE SYSTEM ──
+const LORE_LOGS = [
+    { id: 'origin', trigger: (s) => s.round === 2, text: "LOG #042: Subject 72 showed increased heart rate during the first discharge. The current was set to 40mA. He survived. The game continues." },
+    { id: 'dealer_truth', trigger: (s) => s.p2.lives === 1, text: "LOG #109: The 'Dealer' is not a man. It is a mirror. It reflects the desperation of the player. If you see blood on the cards, it's because you wanted to see it." },
+    { id: 'machine_code', trigger: (s) => s.tension > 90, text: "LOG #666: VOLTAGE 21 is not a game of blackjack. It is a data collection protocol. We are measuring how much static a human soul can absorb before it flatlines." },
+    { id: 'overcharge_risk', trigger: (s) => s.phase === 'overcharge', text: "LOG #012: The 'Overcharge' function was an accidental discovery. By short-circuiting the chair, subjects can momentarily bypass the dealer's perception. Highly lethal." }
+];
+
+let loreTriggered = new Set();
+async function checkLoreTriggers() {
+    for (const log of LORE_LOGS) {
+        if (loreTriggered.has(log.id)) continue;
+        if (log.trigger(state)) {
+            loreTriggered.add(log.id);
+            await showLore(log.text);
+        }
+    }
+}
+
+async function showLore(text) {
+    ui.loreText.textContent = '';
+    ui.loreScreen.classList.remove('hidden');
+    await typeWriter(text, ui.loreText, 30);
+    return new Promise(resolve => {
+        ui.loreClose.onclick = () => {
+            ui.loreScreen.classList.add('hidden');
+            resolve();
+        };
+    });
 }
 
 // ── UI ELEMENTS ──
@@ -942,7 +1203,30 @@ const ui = {
     storyScreen:  document.getElementById('story-screen'),
     storyText:    document.getElementById('story-text'),
     storyNext:    document.getElementById('story-continue'),
+    interScreen:  document.getElementById('interaction-screen'),
+    interPrompt:  document.getElementById('interaction-prompt'),
+    interChoices: document.getElementById('interaction-choices'),
+    loreScreen:   document.getElementById('lore-screen'),
+    loreText:     document.getElementById('lore-text'),
+    loreClose:    document.getElementById('lore-close'),
 };
+
+async function showInteraction(prompt, choices) {
+    return new Promise(resolve => {
+        ui.interPrompt.textContent = prompt;
+        ui.interChoices.innerHTML = '';
+        choices.forEach(choice => {
+            const btn = document.createElement('button');
+            btn.textContent = choice.text;
+            btn.onclick = () => {
+                ui.interScreen.classList.add('hidden');
+                resolve(choice.id);
+            };
+            ui.interChoices.appendChild(btn);
+        });
+        ui.interScreen.classList.remove('hidden');
+    });
+}
 
 async function typeWriter(text, element, speed = 40) {
     element.textContent = '';
@@ -1131,7 +1415,6 @@ function renderOppHand(hand, showAll = false, statusText = '') {
 
 // ── SHOCK ──
 // ── AUDIO ──
-let bgMusic = null;
 function startMusic() {
     if (bgMusic) return; // Already playing
     bgMusic = new Audio('1Askim Cok Pardon (Instrumental Slowed).mp3');
@@ -1251,6 +1534,13 @@ function waitForAction(who, busted = false) {
         // Re-wire every time so local 2P works even if online mode overwrote these
         document.getElementById('btn-hit').onclick   = () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('hit'); } };
         document.getElementById('btn-stand').onclick = () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('stand'); } };
+        
+        const ocBtn = document.getElementById('btn-overcharge');
+        if (ocBtn) {
+            ocBtn.disabled = busted || state[who].lives <= 1;
+            ocBtn.onclick = () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('overcharge'); } };
+        }
+
         ui.actionLabel.textContent = busted
             ? `${state[who].name} — BUSTED. Bluff or fold?`
             : `${state[who].name}'s Turn`;
@@ -1334,6 +1624,7 @@ wireBtn('btn-hit', () => { if (_actionResolve) { const r = _actionResolve; _acti
 wireBtn('btn-stand', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('stand'); } });
 wireBtn('btn-bluff', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('bluff'); } });
 wireBtn('btn-fold', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('fold'); } });
+wireBtn('btn-overcharge', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('overcharge'); } });
 wireBtn('btn-restart', () => { document.getElementById('game-over-screen').classList.add('hidden'); startGame(); });
 
 // ── PLAYER TURN (LOCAL) ──
@@ -1373,8 +1664,16 @@ async function localPlayerTurn(who) {
             playCardFlip();
             renderHand(player.hand, true);
 
+        } else if (action === 'overcharge') {
+            await showMessage("⚡ OVERCHARGING ⚡", 1000);
+            await doShock(who, false); // Take 1 shock
+            player.hand.push(drawCard());
+            playCardFlip();
+            renderHand(player.hand, true);
+            
         } else if (action === 'stand') {
             if (busted) {
+                await burnCards(playerCards3D);
                 await showMessage(`${player.name} busts!`, 1400);
                 return { result: 'bust', who };
             }
@@ -1457,9 +1756,9 @@ async function resolveRound(r1, r2) {
         renderOppHand(state.p2.hand, true, '');
         await showMessage('Real hands revealed!', 1200);
         let realWinner = null;
-        if (bust1 && bust2)  { /* draw */ }
-        else if (bust1)       realWinner = 'p2';
-        else if (bust2)       realWinner = 'p1';
+        if (bust1 && bust2)  { await burnCards([...playerCards3D, ...oppCards3D]); /* draw */ }
+        else if (bust1)       { await burnCards(playerCards3D); realWinner = 'p2'; }
+        else if (bust2)       { await burnCards(oppCards3D); realWinner = 'p1'; }
         else if (t1 > t2)     realWinner = 'p1';
         else if (t2 > t1)     realWinner = 'p2';
 
@@ -1547,18 +1846,22 @@ function showGameOver(winner) {
 function getDealerAIAction() {
     const hand = state.p2.hand;
     const total = handTotal(hand);
+    state.p2.isBluffing = false;
     
     // If busted, always bluff or fold
     if (total > 21) {
-        // 70% chance to bluff if total is close to 21, otherwise fold
-        if (total <= 25 && Math.random() < 0.7) {
+        // Chance to bluff if total is close to 21, otherwise fold
+        if (total <= 25 && Math.random() < state.p2.bluffFrequency) {
+            state.p2.isBluffing = true;
             return { action: 'bluff', claim: 18 + Math.floor(Math.random() * 4) };
         }
         return { action: 'fold' };
     }
 
-    // Hit on 16 or less
-    if (total <= 16) return { action: 'hit' };
+    // Hit threshold modified by aggression
+    // Standard is 16. High aggression might hit on 17 or 18.
+    const hitThreshold = 16 + (state.p2.aggression - 1.0) * 2;
+    if (total <= hitThreshold) return { action: 'hit' };
     
     // Stand on 17+
     return { action: 'stand' };
@@ -1620,9 +1923,31 @@ async function runAIGame() {
         }
 
         await resolveRound(r1, r2);
+        await checkLoreTriggers();
 
         const check = checkGameOver();
         if (check.over) { showGameOver(check.winner); return; }
+
+        // Narrative Intermission
+        if (state.round < MAX_ROUNDS) {
+            const result = await showInteraction("The machine cycles. The Dealer watches you through the smoke. What do you do?", [
+                { id: 'provoke', text: "Provoke him: 'Is that all you've got?'" },
+                { id: 'focus', text: "Focus: (Remain silent and watch the deck)" },
+                { id: 'plead', text: "Plead: 'Please... just let me go.'" }
+            ]);
+            
+            if (result === 'provoke') {
+                state.p2.aggression += 0.2;
+                state.p2.bluffFrequency += 0.1;
+                await showMessage("The Dealer leans in. He'll hit harder now.", 2000);
+            } else if (result === 'focus') {
+                state.p2.aggression = Math.max(1.0, state.p2.aggression - 0.1);
+                await showMessage("You see a pattern. Your focus sharpens.", 2000);
+            } else if (result === 'plead') {
+                state.p2.bluffFrequency += 0.2;
+                await showMessage("The Dealer smiles. He smells weakness.", 2000);
+            }
+        }
 
         state.round++;
         state.tension = Math.min(100, state.tension + 8);
@@ -1657,6 +1982,7 @@ async function runLocalGame() {
         }
 
         await resolveRound(r1, r2);
+        await checkLoreTriggers();
 
         const check = checkGameOver();
         if (check.over) { showGameOver(check.winner); return; }
@@ -2175,12 +2501,20 @@ function animate() {
     const dt = Math.min(clock.getDelta(), 0.05);
 
     updateFlicker(dt);
+    updateSwingingLight(dt);
+    updateAudioAtmosphere();
+    updateDealerVisuals(dt);
     updateDevice(dt);
     updateShake(dt);
 
     // Update tween animations
     for (let i = tweens.length - 1; i >= 0; i--) {
         if (tweens[i].update(dt)) tweens.splice(i, 1);
+    }
+
+    // Update ash particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        if (particles[i].update(dt)) particles.splice(i, 1);
     }
 
     // Update shock arc effects
