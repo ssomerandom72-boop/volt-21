@@ -2023,6 +2023,11 @@ function showLobby() {
             gameMode = 'local'; lobby.classList.add('hidden'); resolve('local');
         });
 
+        wireBtn('mode-ai', () => {
+            console.log('AI mode clicked');
+            gameMode = 'ai'; lobby.classList.add('hidden'); resolve('ai');
+        });
+
         wireBtn('mode-story', () => {
             console.log('Story mode clicked');
             gameMode = 'story'; lobby.classList.add('hidden'); resolve('story');
@@ -2135,6 +2140,10 @@ async function startGame() {
 
     if (mode === 'story') {
         await runStoryMode();
+    } else if (mode === 'ai') {
+        resetState(); updateUI();
+        await showMessage('VOLTAGE 21', 1600);
+        await runAIGame();
     } else if (mode === 'local') {
         resetState(); updateUI();
         await showMessage('VOLTAGE 21', 1600);
