@@ -1313,17 +1313,17 @@ function resetBluffRow() {
 }
 
 // Button wiring
-function wire(id, cb) {
+function wireBtn(id, cb) {
     const el = document.getElementById(id);
     if (el) el.onclick = cb;
 }
 
 console.log('Wiring gameplay buttons...');
-wire('btn-hit', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('hit'); } });
-wire('btn-stand', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('stand'); } });
-wire('btn-bluff', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('bluff'); } });
-wire('btn-fold', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('fold'); } });
-wire('btn-restart', () => { document.getElementById('game-over-screen').classList.add('hidden'); startGame(); });
+wireBtn('btn-hit', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('hit'); } });
+wireBtn('btn-stand', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('stand'); } });
+wireBtn('btn-bluff', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('bluff'); } });
+wireBtn('btn-fold', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('fold'); } });
+wireBtn('btn-restart', () => { document.getElementById('game-over-screen').classList.add('hidden'); startGame(); });
 
 // ── PLAYER TURN (LOCAL) ──
 async function localPlayerTurn(who) {
@@ -1929,28 +1929,28 @@ function showLobby() {
         const onlineOpts  = document.getElementById('online-options');
         const roomDisplay = document.getElementById('room-code-display');
 
-        wire('mode-local', () => {
+        wireBtn('mode-local', () => {
             console.log('Local mode clicked');
             gameMode = 'local'; lobby.classList.add('hidden'); resolve('local');
         });
 
-        wire('mode-story', () => {
+        wireBtn('mode-story', () => {
             console.log('Story mode clicked');
             gameMode = 'story'; lobby.classList.add('hidden'); resolve('story');
         });
 
-        wire('mode-online', () => {
+        wireBtn('mode-online', () => {
             console.log('Online mode clicked');
             lobbyBtns.classList.add('hidden'); onlineSetup.classList.remove('hidden');
         });
 
-        wire('online-back-btn', () => {
+        wireBtn('online-back-btn', () => {
             onlineSetup.classList.add('hidden'); lobbyBtns.classList.remove('hidden');
             roomDisplay.classList.add('hidden'); onlineOpts.classList.remove('hidden');
             if (online.peer) { online.peer.destroy(); online.peer = null; }
         });
 
-        wire('create-room-btn', () => {
+        wireBtn('create-room-btn', () => {
             console.log('Create room clicked');
             const code = generateCode();
             online.roomCode = code; online.isHost = true;
@@ -1979,7 +1979,7 @@ function showLobby() {
             }
         });
 
-        wire('join-room-btn', () => {
+        wireBtn('join-room-btn', () => {
             console.log('Join room clicked');
             const code = document.getElementById('join-code-input').value.trim().toUpperCase();
             if (!code) return;
