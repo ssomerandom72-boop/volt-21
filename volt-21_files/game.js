@@ -1161,10 +1161,18 @@ const online = {
                 { 'urls': 'stun:stun.l.google.com:19302' },
                 { 'urls': 'stun:stun1.l.google.com:19302' },
                 { 'urls': 'stun:stun2.l.google.com:19302' },
-                { 'urls': 'stun:stun3.l.google.com:19302' },
-                { 'urls': 'stun:stun4.l.google.com:19302' },
                 { 'urls': 'stun:stun.services.mozilla.com' },
-                { 'urls': 'stun:stun.relay.metered.ca:80' }
+                // Adding a public TURN server for better NAT traversal
+                {
+                    'urls': 'turn:relay.metered.ca:443',
+                    'username': 'openrelayproject',
+                    'credential': 'openrelayproject'
+                },
+                {
+                    'urls': 'turn:relay.metered.ca:80',
+                    'username': 'openrelayproject',
+                    'credential': 'openrelayproject'
+                }
             ],
             'iceCandidatePoolSize': 10
         }
@@ -2541,7 +2549,13 @@ function showLobby() {
                 });
 
                 online.peer.on('connection', conn => {
-                    console.log('Incoming connection detected from guest...');
+                    // Ignore new connection attempts if one is already open or pending
+                    if (online.conn && (online.conn.open || online.conn.peer === conn.peer)) {
+                        console.log('Duplicate or redundant connection attempt ignored from: ' + conn.peer);
+                        return;
+                    }
+
+                    console.log('Incoming connection detected from guest: ' + conn.peer);
                     online.conn = conn;
                     
                     const timeout = setTimeout(() => {
@@ -2549,6 +2563,17 @@ function showLobby() {
                         console.error('Handshake with guest failed (timeout)');
                         document.getElementById('lobby-status').textContent = 'Handshake stalled. Check for strict NAT.';
                     }, 20000);
+
+                    // Track ICE Connection State
+                    const peerConnection = conn.peerConnection;
+                    if (peerConnection) {
+                        peerConnection.oniceconnectionstatechange = () => {
+                            console.log('ICE state (Host): ' + peerConnection.iceConnectionState);
+                            if (peerConnection.iceConnectionState === 'failed') {
+                                document.getElementById('lobby-status').textContent = 'ICE Negotiation Failed. Use a different network.';
+                            }
+                        };
+                    }
 
                     conn.on('open', () => {
                         clearTimeout(timeout);
