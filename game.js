@@ -938,7 +938,18 @@ const ui = {
     gameOverTitle:document.getElementById('game-over-title'),
     shockOverlay: document.getElementById('shock-overlay'),
     turnBanner:   document.getElementById('turn-banner'),
+    storyScreen:  document.getElementById('story-screen'),
+    storyText:    document.getElementById('story-text'),
+    storyNext:    document.getElementById('story-continue'),
 };
+
+async function typeWriter(text, element, speed = 40) {
+    element.textContent = '';
+    for (let i = 0; i < text.length; i++) {
+        element.textContent += text[i];
+        if (text[i] !== ' ') await wait(speed);
+    }
+}
 
 // ── BONUS CARD UI ──
 function injectBonusUI() {
@@ -1971,11 +1982,45 @@ function showLobby() {
 }
 
 // ── START ──
+async function runStoryMode() {
+    const lines = [
+        "You don't remember how you got here.",
+        "The last thing you recall was a cold rain and a wrong turn down an alleyway.",
+        "Now, you're strapped into this chair. Your hands are free, but your ankles are locked.",
+        "A neon sign flickers across from you: 'VOLTAGE 21'.",
+        "A man in the shadows speaks: 'Twenty-one to live, my friend. Anything else... is a shock to the system.'",
+        "The machine hums with lethal intent. Let the game begin."
+    ];
+
+    ui.storyScreen.classList.remove('hidden');
+    
+    for (const line of lines) {
+        ui.storyNext.classList.add('hidden');
+        await typeWriter(line, ui.storyText, 35);
+        ui.storyNext.classList.remove('hidden');
+        
+        await new Promise(resolve => {
+            const handler = () => {
+                ui.storyScreen.removeEventListener('click', handler);
+                resolve();
+            };
+            ui.storyScreen.addEventListener('click', handler);
+        });
+    }
+
+    ui.storyScreen.classList.add('hidden');
+    resetState(); updateUI();
+    await showMessage('VOLTAGE 21', 1600);
+    await runLocalGame();
+}
+
 async function startGame() {
     injectBonusUI();
     const mode = await showLobby();
 
-    if (mode === 'local') {
+    if (mode === 'story') {
+        await runStoryMode();
+    } else if (mode === 'local') {
         resetState(); updateUI();
         await showMessage('VOLTAGE 21', 1600);
         await runLocalGame();
