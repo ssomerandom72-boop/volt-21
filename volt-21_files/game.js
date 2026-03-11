@@ -672,8 +672,8 @@ function playBonusSound() {
 }
 
 const GRUNT_FILES = [
-    'tunetank.com_grunt-short-and-high-(male).wav',
-    'universfield-male-exertion-grunts-352689.mp3',
+    '../tunetank.com_grunt-short-and-high-(male).wav',
+    '../universfield-male-exertion-grunts-352689.mp3',
 ];
 const gruntBuffers = [];
 async function loadGrunts() {
