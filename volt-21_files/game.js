@@ -1,10 +1,8 @@
 // ═══════════════════════════════════════════════
 //  VOLTAGE 21 — Survival Horror Blackjack
-//  Version: 1.1.5
+//  Version: 1.2.0
 // ═══════════════════════════════════════════════
-console.log('%c[VOLTAGE 21] Version 1.1.5 loaded', 'color:#aa00ff; font-weight:bold; font-size:1.2em;');
-
-const ID_PREFIX = "VOLT21-";
+console.log('%c[VOLTAGE 21] Version 1.2.0 loaded', 'color:#aa00ff; font-weight:bold; font-size:1.2em;');
 
 // ── THREE.JS SCENE SETUP ──
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -1163,23 +1161,7 @@ const online = {
                 { 'urls': 'stun:stun1.l.google.com:19302' },
                 { 'urls': 'stun:stun2.l.google.com:19302' },
                 { 'urls': 'stun:stun3.l.google.com:19302' },
-                { 'urls': 'stun:stun4.l.google.com:19302' },
-                { 'urls': 'stun:openrelay.metered.ca:80' },
-                {
-                    'urls': 'turn:openrelay.metered.ca:80',
-                    'username': 'openrelayproject',
-                    'credential': 'openrelayproject'
-                },
-                {
-                    'urls': 'turn:openrelay.metered.ca:443',
-                    'username': 'openrelayproject',
-                    'credential': 'openrelayproject'
-                },
-                {
-                    'urls': 'turn:openrelay.metered.ca:443?transport=tcp',
-                    'username': 'openrelayproject',
-                    'credential': 'openrelayproject'
-                }
+                { 'urls': 'stun:stun4.l.google.com:19302' }
             ],
             'iceCandidatePoolSize': 10
         }
@@ -2093,7 +2075,7 @@ async function runLocalGame() {
 
 // ── ONLINE NETWORKING ──
 function generateCode() {
-    return Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 33)]).join('');
+    return Array.from({ length: 7 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 33)]).join('');
 }
 
 function sendToGuest(data) { if (online.conn?.open) online.conn.send(data); }
@@ -2533,6 +2515,13 @@ function showLobby() {
             if (online.peer) { online.peer.destroy(); online.peer = null; }
         });
 
+        wireBtn('net-reset-btn', () => {
+            console.log('Network reset requested');
+            if (online.peer) { online.peer.destroy(); online.peer = null; }
+            document.getElementById('lobby-status').textContent = 'Network cleared. Try again.';
+            document.querySelectorAll('#online-setup button').forEach(b => b.disabled = false);
+        });
+
         wireBtn('create-room-btn', () => {
             console.log('Create room clicked');
             if (online.peer) { online.peer.destroy(); online.peer = null; }
@@ -2544,11 +2533,11 @@ function showLobby() {
             const code = generateCode();
             online.roomCode = code; online.isHost = true;
             try {
-                console.log('Initializing Host Peer with code:', ID_PREFIX + code);
-                online.peer = new Peer(ID_PREFIX + code, online.config);
+                console.log('Initializing Host Peer with code:', code);
+                online.peer = new Peer(code, online.config);
                 
                 online.peer.on('open', (id) => {
-                    console.log('Host Peer registered on signaling server. ID:', id);
+                    console.log('Host registered. Peer ID:', id);
                     onlineOpts.classList.add('hidden'); roomDisplay.classList.remove('hidden');
                     document.getElementById('room-code-text').textContent = code;
                     document.getElementById('lobby-status').textContent = 'Waiting for opponent...';
@@ -2556,35 +2545,33 @@ function showLobby() {
                 });
 
                 online.peer.on('connection', conn => {
-                    // Only block if a connection is ALREADY OPEN. If it's just "pending", allow replacement.
                     if (online.conn && online.conn.open) {
-                        console.log('Ignoring connection from ' + conn.peer + ' because already connected to ' + online.conn.peer);
+                        console.log('Blocking redundant connection from: ' + conn.peer);
                         return;
                     }
 
-                    console.log('Incoming connection detected from guest: ' + conn.peer);
+                    console.log('Guest found! Establishing handshake...');
                     online.conn = conn;
                     
                     const timeout = setTimeout(() => {
                         if (conn.open) return;
-                        console.error('Handshake with guest failed (timeout)');
-                        document.getElementById('lobby-status').textContent = 'Handshake stalled. Check for strict NAT.';
+                        console.error('Handshake Timeout');
+                        document.getElementById('lobby-status').textContent = 'Handshake timeout. Try Reset Network.';
                     }, 25000);
 
-                    // Track ICE Connection State
-                    const peerConnection = conn.peerConnection;
-                    if (peerConnection) {
-                        peerConnection.oniceconnectionstatechange = () => {
-                            console.log('ICE state (Host): ' + peerConnection.iceConnectionState);
-                            if (peerConnection.iceConnectionState === 'failed') {
-                                document.getElementById('lobby-status').textContent = 'Negotiation Failed. Try a mobile hotspot.';
-                            }
+                    // WebRTC Debugging
+                    if (conn.peerConnection) {
+                        conn.peerConnection.oniceconnectionstatechange = () => {
+                            const state = conn.peerConnection.iceConnectionState;
+                            console.log('Handshake State: ' + state);
+                            if (state === 'failed') document.getElementById('lobby-status').textContent = 'ROUTE FAILED. Try a different network.';
+                            else if (state === 'checking') document.getElementById('lobby-status').textContent = 'NEGOTIATING ROUTE...';
                         };
                     }
 
                     conn.on('open', () => {
                         clearTimeout(timeout);
-                        console.log('Data connection established with guest!');
+                        console.log('CONNECTED TO GUEST');
                         document.getElementById('lobby-status').textContent = 'CONNECTED!';
                         gameMode = 'online';
                         conn.on('data', handleGuestMessage);
@@ -2593,24 +2580,25 @@ function showLobby() {
 
                     conn.on('error', err => {
                         clearTimeout(timeout);
-                        console.error('Connection error (host side):', err);
-                        document.getElementById('lobby-status').textContent = 'Connection error: ' + err.type;
+                        console.error('Handshake Error:', err);
+                        document.getElementById('lobby-status').textContent = 'Error: ' + err.type;
                     });
                 });
 
                 online.peer.on('error', err => {
                     btn.disabled = false;
-                    console.error('Peer Server Error (Host):', err);
-                    document.getElementById('lobby-status').textContent = 'Server error: ' + err.type;
+                    console.error('Peer Server Error:', err);
+                    document.getElementById('lobby-status').textContent = 'Network Error: ' + err.type;
+                    if (err.type === 'unavailable-id') document.getElementById('lobby-status').textContent = 'ID Busy. Try again.';
                 });
 
                 online.peer.on('disconnected', () => {
-                    console.warn('Host disconnected from signaling server. Reconnecting...');
+                    console.warn('Disconnected from server. Attempting reconnect...');
                     online.peer.reconnect();
                 });
             } catch (e) {
                 btn.disabled = false;
-                console.error('Fatal Host Error:', e);
+                console.error('Fatal Peer Error:', e);
             }
         });
 
@@ -2631,27 +2619,33 @@ function showLobby() {
                 online.peer = new Peer(online.config);
                 
                 online.peer.on('open', (id) => {
-                    console.log('Guest Peer ID:', id);
-                    document.getElementById('lobby-status').textContent = 'ESTABLISHING SIGNAL...';
+                    console.log('Guest Signaling ID:', id);
+                    document.getElementById('lobby-status').textContent = 'SEARCHING FOR ROOM...';
                     
-                    // Small delay to ensure host is registered
                     setTimeout(() => {
-                        console.log('Attempting PeerJS connection to ' + ID_PREFIX + code);
-                        const conn = online.peer.connect(ID_PREFIX + code, {
-                            metadata: { version: '1.1.5' }
-                        });
+                        console.log('Searching for host room: ' + code);
+                        const conn = online.peer.connect(code, { metadata: { version: '1.2.0' } });
                         online.conn = conn;
                         
                         const timeout = setTimeout(() => {
                             if (conn.open) return;
-                            console.error('Handshake with host failed (timeout)');
-                            document.getElementById('lobby-status').textContent = 'Handshake stalled. Room code correct?';
+                            console.error('Search Timeout');
+                            document.getElementById('lobby-status').textContent = 'Room not found. Check code or Reset Network.';
                             btn.disabled = false;
                         }, 25000);
                         
+                        // WebRTC Debugging
+                        if (conn.peerConnection) {
+                            conn.peerConnection.oniceconnectionstatechange = () => {
+                                const state = conn.peerConnection.iceConnectionState;
+                                console.log('Handshake State: ' + state);
+                                if (state === 'checking') document.getElementById('lobby-status').textContent = 'NEGOTIATING ROUTE...';
+                            };
+                        }
+
                         conn.on('open', () => {
                             clearTimeout(timeout);
-                            console.log('Data connection established with host!');
+                            console.log('CONNECTED TO HOST');
                             document.getElementById('lobby-status').textContent = 'CONNECTED!';
                             gameMode = 'online';
                             conn.on('data', handleHostMessage);
@@ -2661,25 +2655,25 @@ function showLobby() {
                         conn.on('error', err => {
                             clearTimeout(timeout);
                             btn.disabled = false;
-                            console.error('Connection error (guest side):', err);
-                            document.getElementById('lobby-status').textContent = 'Connect failed: ' + err.type;
+                            console.error('Search Error:', err);
+                            document.getElementById('lobby-status').textContent = 'Connection Error: ' + err.type;
                         });
                     }, 500);
                 });
 
                 online.peer.on('error', err => {
                     btn.disabled = false;
-                    console.error('Peer Server Error (Guest):', err);
-                    document.getElementById('lobby-status').textContent = 'Server error: ' + err.type;
+                    console.error('Peer Server Error:', err);
+                    document.getElementById('lobby-status').textContent = 'Signaling Error: ' + err.type;
                 });
 
                 online.peer.on('disconnected', () => {
-                    console.warn('Guest disconnected from signaling server. Reconnecting...');
+                    console.warn('Disconnected. Reconnecting...');
                     online.peer.reconnect();
                 });
             } catch (e) {
                 btn.disabled = false;
-                console.error('Fatal Guest Error:', e);
+                console.error('Fatal Peer Error:', e);
             }
         });
     });
