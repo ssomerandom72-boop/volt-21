@@ -1914,6 +1914,10 @@ function showLobby() {
             gameMode = 'local'; lobby.classList.add('hidden'); resolve('local');
         };
 
+        document.getElementById('mode-story').onclick = () => {
+            gameMode = 'story'; lobby.classList.add('hidden'); resolve('story');
+        };
+
         document.getElementById('mode-online').onclick = () => {
             lobbyBtns.classList.add('hidden'); onlineSetup.classList.remove('hidden');
         };
