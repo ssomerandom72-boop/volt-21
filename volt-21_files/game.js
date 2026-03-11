@@ -776,42 +776,42 @@ const STORY_EVENTS = [
     {
         id: 'intro',
         text: "The basement hums with anticipation. The machine waits. Your pulse syncs with the failing lights.",
-        trigger: (s) => s.round === 1 && s.phase === 'deal'
+        trigger: (s) => s && s.round === 1 && s.phase === 'deal'
     },
     {
         id: 'first_shock',
         text: "The first jolt rattles your bones. You taste copper. The machine is hungry.",
-        trigger: (s) => s.round === 1 && s.p1.lives < MAX_LIVES
+        trigger: (s) => s && s.p1 && s.p1.lives < MAX_LIVES
     },
     {
         id: 'losing_streak',
         text: "Another failure. The walls seem to breathe. Something watches from the shadows.",
-        trigger: (s) => s.round >= 2 && s.p1.roundWins === 0
+        trigger: (s) => s && s.p1 && s.round >= 2 && s.p1.roundWins === 0
     },
     {
         id: 'winning_streak',
         text: "Victory tastes like static. The machine growls. It doesn't like to lose.",
-        trigger: (s) => s.round >= 2 && s.p1.roundWins >= 2
+        trigger: (s) => s && s.p1 && s.round >= 2 && s.p1.roundWins >= 2
     },
     {
         id: 'final_round',
         text: "The final round. The air crackles. This isn't just a game anymore.",
-        trigger: (s) => s.round === MAX_ROUNDS
+        trigger: (s) => s && s.round === MAX_ROUNDS
     },
     {
         id: 'near_defeat',
         text: "One more shock and it's over. The lights flicker like a dying heartbeat.",
-        trigger: (s) => s.p1.lives === 1
+        trigger: (s) => s && s.p1 && s.p1.lives === 1
     },
     {
         id: 'blood_cards',
         text: "The cards feel warm. Are those... fingerprints? No, just the humidity.",
-        trigger: (s) => s.round >= 3 && s.tension > 70
+        trigger: (s) => s && s.round >= 3 && s.tension > 70
     },
     {
         id: 'whispers',
         text: "Did you hear that? Just the wind through the broken window. Probably.",
-        trigger: (s) => s.round >= 4 && Math.random() < 0.3
+        trigger: (s) => s && s.round >= 4 && Math.random() < 0.3
     }
 ];
 
