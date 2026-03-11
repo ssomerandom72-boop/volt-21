@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════
 //  VOLTAGE 21 — Survival Horror Blackjack
-//  Version: 1.5.0 (MQTT RELAY)
+//  Version: 1.5.1 (MQTT RELAY - SECURE)
 // ═══════════════════════════════════════════════
-console.log('%c[VOLTAGE 21] Version 1.5.0 loaded', 'color:#00ffff; font-weight:bold; font-size:1.4em;');
+console.log('%c[VOLTAGE 21] Version 1.5.1 loaded', 'color:#00ffff; font-weight:bold; font-size:1.4em;');
 
 // ── THREE.JS SCENE SETUP ──
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -243,7 +243,8 @@ function resetState() {
 // ── NETWORKING (MQTT) ──
 async function initMQTT(code) {
     online.roomCode = code; online.topic = 'volt21/room/' + code;
-    online.client = new Paho.MQTT.Client('broker.hivemq.com', 8000, online.clientId);
+    // HiveMQ Public Broker WSS port is 8884
+    online.client = new Paho.MQTT.Client('broker.hivemq.com', 8884, online.clientId);
     
     online.client.onMessageArrived = (msg) => {
         const data = JSON.parse(msg.payloadString);
@@ -258,7 +259,8 @@ async function initMQTT(code) {
                 res();
             },
             onFailure: rej,
-            useSSL: false
+            useSSL: true,
+            timeout: 10
         });
     });
 }
