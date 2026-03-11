@@ -771,6 +771,116 @@ function randomBonus() {
     return BONUS_POOL[Math.floor(Math.random() * BONUS_POOL.length)];
 }
 
+// ── STORY SYSTEM ──
+const STORY_EVENTS = [
+    {
+        id: 'intro',
+        text: "The basement hums with anticipation. The machine waits. Your pulse syncs with the failing lights.",
+        trigger: (s) => s.round === 1 && s.phase === 'deal'
+    },
+    {
+        id: 'first_shock',
+        text: "The first jolt rattles your bones. You taste copper. The machine is hungry.",
+        trigger: (s) => s.round === 1 && s.p1.lives < MAX_LIVES
+    },
+    {
+        id: 'losing_streak',
+        text: "Another failure. The walls seem to breathe. Something watches from the shadows.",
+        trigger: (s) => s.round >= 2 && s.p1.roundWins === 0
+    },
+    {
+        id: 'winning_streak',
+        text: "Victory tastes like static. The machine growls. It doesn't like to lose.",
+        trigger: (s) => s.round >= 2 && s.p1.roundWins >= 2
+    },
+    {
+        id: 'final_round',
+        text: "The final round. The air crackles. This isn't just a game anymore.",
+        trigger: (s) => s.round === MAX_ROUNDS
+    },
+    {
+        id: 'near_defeat',
+        text: "One more shock and it's over. The lights flicker like a dying heartbeat.",
+        trigger: (s) => s.p1.lives === 1
+    },
+    {
+        id: 'blood_cards',
+        text: "The cards feel warm. Are those... fingerprints? No, just the humidity.",
+        trigger: (s) => s.round >= 3 && s.tension > 70
+    },
+    {
+        id: 'whispers',
+        text: "Did you hear that? Just the wind through the broken window. Probably.",
+        trigger: (s) => s.round >= 4 && Math.random() < 0.3
+    }
+];
+
+let storyTriggered = new Set();
+
+function checkStoryEvents() {
+    for (const event of STORY_EVENTS) {
+        if (storyTriggered.has(event.id)) continue;
+        if (event.trigger(state)) {
+            storyTriggered.add(event.id);
+            triggerStoryEvent(event);
+        }
+    }
+}
+
+function triggerStoryEvent(event) {
+    // Visual glitch
+    state.glitchIntensity = 1.5;
+    
+    // Audio whisper
+    playWhisper();
+    
+    // Text message
+    showMessage(event.text, 2500);
+    
+    // Blood splatter effect on cards
+    if (event.id === 'blood_cards') {
+        addBloodSplatter();
+    }
+}
+
+function playWhisper() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 2.0);
+    g.gain.setValueAtTime(0.05, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.0);
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + 2.0);
+}
+
+function addBloodSplatter() {
+    // Create blood texture
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 358;
+    const ctx = canvas.getContext('2d');
+    
+    // Draw blood splatters
+    ctx.fillStyle = 'rgba(100, 0, 0, 0.6)';
+    for (let i = 0; i < 8; i++) {
+        ctx.beginPath();
+        ctx.arc(Math.random() * 256, Math.random() * 358, Math.random() * 20, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    const bloodTex = new THREE.CanvasTexture(canvas);
+    
+    // Apply to all visible cards
+    [...playerCards3D, ...oppCards3D].forEach(mesh => {
+        if (Array.isArray(mesh.material)) {
+            mesh.material[2].map = bloodTex;
+            mesh.material[2].needsUpdate = true;
+        }
+    });
+}
+
 // ── STATE ──
 const MAX_LIVES  = 3;
 const MAX_ROUNDS = 5;
@@ -797,9 +907,11 @@ function resetState() {
         tension: 0,
         phase: 'deal',
         isAnimating: false,
+        glitchIntensity: 0,
     };
     playerPrevCount = 0;
     oppPrevCount = 0;
+    storyTriggered.clear();
     clearCards3D(playerCards3D);
     clearCards3D(oppCards3D);
 }
@@ -1891,6 +2003,9 @@ function animate() {
     for (let i = shockArcs.length - 1; i >= 0; i--) {
         if (shockArcs[i].update(dt)) shockArcs.splice(i, 1);
     }
+
+    // Update story events
+    checkStoryEvents();
 
     renderer.render(scene, camera);
 }
