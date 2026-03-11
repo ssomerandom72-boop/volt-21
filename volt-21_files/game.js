@@ -258,74 +258,88 @@ deviceGroup.add(deviceLight);
 deviceGroup.position.copy(DEVICE_POS);
 scene.add(deviceGroup);
 
-// ── DEALER MESH ──
-const dealerGroup = new THREE.Group();
-dealerGroup.position.set(0, 0, -4.5);
-scene.add(dealerGroup);
+// ── AVATAR SYSTEM ──
+class Avatar {
+    constructor(side, color) {
+        this.group = new THREE.Group();
+        this.side = side;
+        this.color = color;
+        
+        const isDealer = side === 'dealer';
+        this.group.position.set(0, 0, isDealer ? -4.5 : 4.5);
+        if (!isDealer) this.group.rotation.y = Math.PI; // Face the dealer
+        
+        // Body
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0x05000a, roughness: 0.9 });
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.8, 2.2, 8), bodyMat);
+        body.position.y = 1.1;
+        this.group.add(body);
 
-const dealerBodyMat = new THREE.MeshStandardMaterial({ color: 0x05000a, roughness: 0.9 });
-const dealerBody = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.8, 2.2, 8), dealerBodyMat);
-dealerBody.position.y = 1.1;
-dealerGroup.add(dealerBody);
+        // Mask
+        this.maskGroup = new THREE.Group();
+        this.maskGroup.position.set(0, 2.4, 0.6);
+        this.group.add(this.maskGroup);
 
-// Procedural low-poly mask
-const maskGroup = new THREE.Group();
-maskGroup.position.set(0, 2.4, 0.6);
-dealerGroup.add(maskGroup);
+        this.maskMat = new THREE.MeshStandardMaterial({ 
+            color: 0x110022, 
+            emissive: color, 
+            emissiveIntensity: 0.5, 
+            roughness: 0.3,
+            metalness: 0.8
+        });
 
-const maskMat = new THREE.MeshStandardMaterial({ 
-    color: 0x110022, 
-    emissive: 0xaa00ff, 
-    emissiveIntensity: 0.5, 
-    roughness: 0.3,
-    metalness: 0.8
-});
+        const maskGeo = new THREE.IcosahedronGeometry(0.35, 1);
+        this.maskMesh = new THREE.Mesh(maskGeo, this.maskMat);
+        this.maskGroup.add(this.maskMesh);
+        
+        // Eyes
+        const eyeGeo = new THREE.BoxGeometry(0.15, 0.02, 0.05);
+        const eyeMat = new THREE.MeshBasicMaterial({ color: color });
+        const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+        eyeL.position.set(-0.12, 0.05, 0.32);
+        this.maskGroup.add(eyeL);
+        
+        const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+        eyeR.position.set(0.12, 0.05, 0.32);
+        this.maskGroup.add(eyeR);
 
-function createMask() {
-    const maskGeo = new THREE.IcosahedronGeometry(0.35, 1);
-    const maskMesh = new THREE.Mesh(maskGeo, maskMat);
-    maskGroup.add(maskMesh);
-    
-    // Add glowing "eyes"
-    const eyeGeo = new THREE.BoxGeometry(0.15, 0.02, 0.05);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
-    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-    eyeL.position.set(-0.12, 0.05, 0.32);
-    maskGroup.add(eyeL);
-    
-    const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
-    eyeR.position.set(0.12, 0.05, 0.32);
-    maskGroup.add(eyeR);
-    
-    return maskMesh;
+        scene.add(this.group);
+    }
+
+    update(dt, isBluffing) {
+        // Subtle breathing
+        this.group.position.y = Math.sin(Date.now() * 0.0015 + (this.side === 'dealer' ? 0 : Math.PI)) * 0.05;
+        
+        // Audio-reactive mask
+        if (audioAnalyser) {
+            const data = new Uint8Array(audioAnalyser.frequencyBinCount);
+            audioAnalyser.getByteFrequencyData(data);
+            const avg = data.reduce((a, b) => a + b) / data.length;
+            const s = 1 + avg / 120;
+            this.maskGroup.scale.set(s, s, s);
+            this.maskMat.emissiveIntensity = 0.5 + avg / 50;
+        }
+        
+        // "Tell" vibration
+        if (isBluffing) {
+            this.maskGroup.position.x = (Math.random() - 0.5) * 0.02;
+            this.maskGroup.position.y = 2.4 + (Math.random() - 0.5) * 0.02;
+            this.maskMat.emissive.setHex(0xff0000); // Shift to red
+        } else {
+            this.maskGroup.position.x = 0;
+            this.maskGroup.position.y = 2.4;
+            this.maskMat.emissive.setHex(this.color);
+        }
+    }
 }
-const dealerMask = createMask();
 
-function updateDealerVisuals(dt) {
-    if (!dealerGroup) return;
-    
-    // Subtle breathing
-    dealerGroup.position.y = Math.sin(Date.now() * 0.0015) * 0.05;
-    
-    // Audio-reactive mask
-    if (audioAnalyser) {
-        const data = new Uint8Array(audioAnalyser.frequencyBinCount);
-        audioAnalyser.getByteFrequencyData(data);
-        const avg = data.reduce((a, b) => a + b) / data.length;
-        const s = 1 + avg / 120;
-        maskGroup.scale.set(s, s, s);
-        maskMat.emissiveIntensity = 0.5 + avg / 50;
-    }
-    
-    // "Tell" vibration when bluffing
-    if (state && state.p2 && state.p2.isBluffing) {
-        maskGroup.position.x = (Math.random() - 0.5) * 0.02;
-        maskGroup.position.y = 2.4 + (Math.random() - 0.5) * 0.02;
-        maskMat.emissive.setHex(0xff0000); // Shift to red
-    } else {
-        maskGroup.position.x = 0;
-        maskMat.emissive.setHex(0xaa00ff);
-    }
+const dealerAvatar = new Avatar('dealer', 0xaa00ff);
+const playerAvatar = new Avatar('player', 0x00ffff);
+
+function updateAvatars(dt) {
+    const p2Bluffing = state && state.p2 && state.p2.isBluffing;
+    dealerAvatar.update(dt, p2Bluffing);
+    playerAvatar.update(dt, false);
 }
 
 // ── SIDE ELECTRODE STANDS + CABLES ──
@@ -2533,7 +2547,7 @@ function animate() {
     updateFlicker(dt);
     updateSwingingLight(dt);
     updateAudioAtmosphere();
-    updateDealerVisuals(dt);
+    updateAvatars(dt);
     updateDevice(dt);
     updateShake(dt);
 
