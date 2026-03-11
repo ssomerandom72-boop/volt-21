@@ -72,20 +72,6 @@
     <div id="crt-overlay"></div>
     <div id="shock-overlay"></div>
 
-    <!-- Error Console -->
-    <div id="error-console" style="position:fixed; bottom:0; left:0; width:100%; background:rgba(255,0,0,0.9); color:white; font-family:monospace; font-size:14px; z-index:10000; display:none; padding:15px; border-top:2px solid yellow; max-height: 30vh; overflow-y: auto; pointer-events: auto;">
-        <button onclick="this.parentElement.style.display='none'" style="float:right; background:white; color:red; border:none; padding:5px 10px; cursor:pointer; font-weight:bold;">CLOSE</button>
-        <strong>SYSTEM ERROR DETECTED:</strong><br><br>
-    </div>
-    <script>
-        window.onerror = function(msg, url, line, col, error) {
-            var el = document.getElementById('error-console');
-            el.style.display = 'block';
-            el.innerHTML += 'Error: ' + msg + ' at ' + line + ':' + col + '<br>';
-            return false;
-        };
-    </script>
-
     <div id="ui-layer">
         <div style="display: flex; justify-content: space-between;">
             <div id="p1-panel" class="hud-panel">
