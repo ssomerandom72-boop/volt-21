@@ -92,8 +92,32 @@
 
         <div id="message-box" class="hidden"></div>
 
-        <div id="tension-meter">
-            <div id="tension-fill" style="height: 0%;"></div>
+        <div id="turn-banner" class="hud-panel hidden" style="position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); font-size: 2rem; color: #ff00ff; text-shadow: 0 0 20px #ff00ff; z-index: 100;"></div>
+
+        <div id="hand-area" class="hidden" style="position: absolute; bottom: 150px; left: 50%; transform: translateX(-50%); text-align: center;">
+            <div id="hand-value" class="hud-panel" style="display: inline-block; font-size: 1.2rem; margin-bottom: 10px;">Total: 0</div>
+        </div>
+
+        <div id="opponent-area" class="hidden" style="position: absolute; top: 150px; left: 50%; transform: translateX(-50%); text-align: center;">
+            <div id="opp-status" class="hud-panel" style="display: inline-block; font-size: 1rem; color: #ff00ff;">Opponent is thinking...</div>
+        </div>
+
+        <div id="action-area" class="hidden" style="position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: auto;">
+            <div id="action-label" style="font-size: 0.8rem; margin-bottom: 10px; letter-spacing: 2px;">YOUR MOVE</div>
+            <div id="draw-row">
+                <button id="btn-hit">HIT</button>
+                <button id="btn-stand">STAND</button>
+            </div>
+            <div id="bluff-row" class="hidden">
+                <button id="btn-bluff" class="danger">⚡ BLUFF</button>
+                <button id="btn-fold" class="safe">FOLD</button>
+            </div>
+        </div>
+
+        <div id="tension-meter" style="position: absolute; bottom: 40px; right: 40px; width: 20px; height: 200px; border: 1px solid #330044;">
+            <div id="tension-bar" style="position: absolute; bottom: 0; width: 100%; background: #aa00ff; box-shadow: 0 0 15px #aa00ff; transition: height 0.3s; height: 0%;"></div>
+            <!-- Alias for bluffFill if needed -->
+            <div id="bluff-fill" style="display:none;"></div>
         </div>
     </div>
 
