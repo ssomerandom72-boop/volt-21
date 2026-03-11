@@ -1313,11 +1313,17 @@ function resetBluffRow() {
 }
 
 // Button wiring
-document.getElementById('btn-hit').onclick   = () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('hit'); } };
-document.getElementById('btn-stand').onclick = () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('stand'); } };
-document.getElementById('btn-bluff').onclick = () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('bluff'); } };
-document.getElementById('btn-fold').onclick  = () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('fold'); } };
-document.getElementById('btn-restart').onclick = () => { document.getElementById('game-over-screen').classList.add('hidden'); startGame(); };
+function wire(id, cb) {
+    const el = document.getElementById(id);
+    if (el) el.onclick = cb;
+}
+
+console.log('Wiring gameplay buttons...');
+wire('btn-hit', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('hit'); } });
+wire('btn-stand', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('stand'); } });
+wire('btn-bluff', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('bluff'); } });
+wire('btn-fold', () => { if (_actionResolve) { const r = _actionResolve; _actionResolve = null; r('fold'); } });
+wire('btn-restart', () => { document.getElementById('game-over-screen').classList.add('hidden'); startGame(); });
 
 // ── PLAYER TURN (LOCAL) ──
 async function localPlayerTurn(who) {
@@ -1916,69 +1922,88 @@ async function runOnlineHostGame() {
 // ── LOBBY ──
 function showLobby() {
     return new Promise(resolve => {
+        console.log('Lobby initialization started');
         const lobby       = document.getElementById('lobby-screen');
         const lobbyBtns   = document.getElementById('lobby-buttons');
         const onlineSetup = document.getElementById('online-setup');
         const onlineOpts  = document.getElementById('online-options');
         const roomDisplay = document.getElementById('room-code-display');
 
-        document.getElementById('mode-local').onclick = () => {
+        wire('mode-local', () => {
+            console.log('Local mode clicked');
             gameMode = 'local'; lobby.classList.add('hidden'); resolve('local');
-        };
+        });
 
-        document.getElementById('mode-story').onclick = () => {
+        wire('mode-story', () => {
+            console.log('Story mode clicked');
             gameMode = 'story'; lobby.classList.add('hidden'); resolve('story');
-        };
+        });
 
-        document.getElementById('mode-online').onclick = () => {
+        wire('mode-online', () => {
+            console.log('Online mode clicked');
             lobbyBtns.classList.add('hidden'); onlineSetup.classList.remove('hidden');
-        };
+        });
 
-        document.getElementById('online-back-btn').onclick = () => {
+        wire('online-back-btn', () => {
             onlineSetup.classList.add('hidden'); lobbyBtns.classList.remove('hidden');
             roomDisplay.classList.add('hidden'); onlineOpts.classList.remove('hidden');
             if (online.peer) { online.peer.destroy(); online.peer = null; }
-        };
+        });
 
-        document.getElementById('create-room-btn').onclick = () => {
+        wire('create-room-btn', () => {
+            console.log('Create room clicked');
             const code = generateCode();
             online.roomCode = code; online.isHost = true;
-            online.peer = new Peer(code);
-            online.peer.on('open', () => {
-                onlineOpts.classList.add('hidden'); roomDisplay.classList.remove('hidden');
-                document.getElementById('room-code-text').textContent = code;
-                document.getElementById('lobby-status').textContent = 'Waiting...';
-            });
-            online.peer.on('connection', conn => {
-                online.conn = conn;
-                conn.on('open', () => {
-                    document.getElementById('lobby-status').textContent = 'Connected!';
-                    gameMode = 'online';
-                    conn.on('data', handleGuestMessage);
-                    setTimeout(() => { lobby.classList.add('hidden'); resolve('online-host'); }, 700);
+            try {
+                online.peer = new Peer(code);
+                online.peer.on('open', () => {
+                    onlineOpts.classList.add('hidden'); roomDisplay.classList.remove('hidden');
+                    document.getElementById('room-code-text').textContent = code;
+                    document.getElementById('lobby-status').textContent = 'Waiting...';
                 });
-            });
-        };
+                online.peer.on('connection', conn => {
+                    online.conn = conn;
+                    conn.on('open', () => {
+                        document.getElementById('lobby-status').textContent = 'Connected!';
+                        gameMode = 'online';
+                        conn.on('data', handleGuestMessage);
+                        setTimeout(() => { lobby.classList.add('hidden'); resolve('online-host'); }, 700);
+                    });
+                });
+                online.peer.on('error', err => {
+                    console.error('PeerJS error:', err);
+                    document.getElementById('lobby-status').textContent = 'Peer error: ' + err.type;
+                });
+            } catch (e) {
+                console.error('Peer creation failed:', e);
+            }
+        });
 
-        document.getElementById('join-room-btn').onclick = () => {
+        wire('join-room-btn', () => {
+            console.log('Join room clicked');
             const code = document.getElementById('join-code-input').value.trim().toUpperCase();
             if (!code) return;
             online.isHost = false;
-            online.peer = new Peer();
-            online.peer.on('open', () => {
-                const conn = online.peer.connect(code, { reliable: true });
-                online.conn = conn;
-                conn.on('open', () => {
-                    document.getElementById('lobby-status').textContent = 'Connected!';
-                    gameMode = 'online';
-                    conn.on('data', handleHostMessage);
-                    setTimeout(() => { lobby.classList.add('hidden'); resolve('online-guest'); }, 700);
+            try {
+                online.peer = new Peer();
+                online.peer.on('open', () => {
+                    const conn = online.peer.connect(code, { reliable: true });
+                    online.conn = conn;
+                    conn.on('open', () => {
+                        document.getElementById('lobby-status').textContent = 'Connected!';
+                        gameMode = 'online';
+                        conn.on('data', handleHostMessage);
+                        setTimeout(() => { lobby.classList.add('hidden'); resolve('online-guest'); }, 700);
+                    });
+                    conn.on('error', err => {
+                        console.error('Connection error:', err);
+                        document.getElementById('lobby-status').textContent = 'Could not connect.';
+                    });
                 });
-                conn.on('error', () => {
-                    document.getElementById('lobby-status').textContent = 'Could not connect.';
-                });
-            });
-        };
+            } catch (e) {
+                console.error('Peer creation failed:', e);
+            }
+        });
     });
 }
 

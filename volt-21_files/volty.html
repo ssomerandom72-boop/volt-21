@@ -72,6 +72,17 @@
     <div id="crt-overlay"></div>
     <div id="shock-overlay"></div>
 
+    <!-- Error Console -->
+    <div id="error-console" style="position:fixed; top:0; left:0; width:100%; background:rgba(255,0,0,0.8); color:white; font-family:monospace; font-size:12px; z-index:10000; display:none; padding:10px; pointer-events:none;"></div>
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            var el = document.getElementById('error-console');
+            el.style.display = 'block';
+            el.innerHTML += 'Error: ' + msg + ' at ' + line + ':' + col + '<br>';
+            return false;
+        };
+    </script>
+
     <div id="ui-layer">
         <div style="display: flex; justify-content: space-between;">
             <div id="p1-panel" class="hud-panel">
