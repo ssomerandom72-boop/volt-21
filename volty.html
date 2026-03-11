@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOLTAGE 21</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; overflow: hidden; background: #020005; font-family: 'Courier New', Courier, monospace; color: #aa00ff; }
+        #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        
+        /* CRT Overlay Filter */
+        #crt-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 3px, 3px 100%;
+            opacity: 0.15;
+        }
+
+        /* UI Overlays */
+        #ui-layer { position: relative; z-index: 5; pointer-events: none; height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; }
+        .hud-panel { background: rgba(5, 0, 10, 0.85); border: 1px solid #330044; padding: 10px; box-shadow: 0 0 15px rgba(180, 0, 255, 0.2); }
+        .life-on { color: #aa00ff; text-shadow: 0 0 8px #aa00ff; margin-right: 5px; }
+        .life-off { color: #220033; margin-right: 5px; }
+        
+        #message-box { position: absolute; top: 20%; left: 50%; transform: translate(-50%, -50%); font-size: 1.5rem; text-transform: uppercase; letter-spacing: 4px; text-align: center; }
+        #tension-meter { position: absolute; bottom: 40px; right: 40px; width: 20px; height: 200px; border: 1px solid #330044; }
+        #tension-fill { position: absolute; bottom: 0; width: 100%; background: #aa00ff; box-shadow: 0 0 15px #aa00ff; transition: height 0.3s; }
+        
+        .hidden { display: none !important; }
+        
+        /* Modal Screens */
+        .overlay-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.95); z-index: 100;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center;
+        }
+        button {
+            background: transparent; border: 1px solid #aa00ff; color: #aa00ff;
+            padding: 10px 25px; cursor: pointer; font-family: inherit; font-size: 1.2rem;
+            margin: 10px; transition: 0.2s;
+        }
+        button:hover { background: #aa00ff; color: #000; box-shadow: 0 0 20px #aa00ff; }
+        
+        #shock-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #ffffff; opacity: 0; pointer-events: none; z-index: 50;
+        }
+        @keyframes shock-flash {
+            0% { opacity: 0.8; background: #fff; }
+            50% { opacity: 0.4; background: #44aaff; }
+            100% { opacity: 0; }
+        }
+        .shocking { animation: shock-flash 0.5s ease-out; }
+
+        #room-code-display { font-size: 2rem; color: #fff; margin: 20px; letter-spacing: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="crt-overlay"></div>
+    <div id="shock-overlay"></div>
+
+    <div id="ui-layer">
+        <div style="display: flex; justify-content: space-between;">
+            <div id="p1-panel" class="hud-panel">
+                <div id="p1-name-label">YOU</div>
+                <div id="p1-lives"></div>
+                <div id="p1-bonus-row" style="font-size: 0.8rem; margin-top: 5px;"></div>
+            </div>
+            <div id="center-info" class="hud-panel" style="text-align: center;">
+                <div id="round-display">ROUND 1</div>
+                <div id="win-row" style="font-size: 0.7rem; color: #660099;">P1: 0 | P2: 0</div>
+            </div>
+            <div id="p2-panel" class="hud-panel">
+                <div id="p2-name-label">DEALER</div>
+                <div id="p2-lives"></div>
+                <div id="p2-bonus-row" style="font-size: 0.8rem; margin-top: 5px;"></div>
+            </div>
+        </div>
+
+        <div id="message-box" class="hidden"></div>
+
+        <div id="tension-meter">
+            <div id="tension-fill" style="height: 0%;"></div>
+        </div>
+    </div>
+
+    <!-- Lobby Screen -->
+    <div id="lobby-screen" class="overlay-screen">
+        <h1 style="letter-spacing: 15px; font-size: 3rem;">VOLTAGE 21</h1>
+        <p style="color: #440055;">Survival is a game of chance.</p>
+        <div id="lobby-buttons">
+            <button id="mode-local">ENTER BASEMENT (LOCAL)</button>
+            <button id="mode-online">CALL THE OTHER (ONLINE)</button>
+        </div>
+        <div id="online-setup" class="hidden">
+            <div id="online-options">
+                <button id="create-room-btn">CREATE ROOM</button>
+                <div style="margin: 20px;">
+                    <input type="text" id="join-code-input" placeholder="ROOM CODE" style="background:transparent; border:1px solid #aa00ff; color:#fff; padding:10px;">
+                    <button id="join-room-btn">JOIN</button>
+                </div>
+            </div>
+            <div id="room-code-display" class="hidden">
+                CODE: <span id="room-code-text">------</span>
+            </div>
+            <p id="lobby-status">Waiting for connection...</p>
+            <button id="online-back-btn">BACK</button>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="overlay-screen hidden">
+        <h1 id="game-over-title" style="font-size: 4rem;">FLATLINE</h1>
+        <p id="game-over-sub"></p>
+        <button id="btn-restart">RESTART SIMULATION</button>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
