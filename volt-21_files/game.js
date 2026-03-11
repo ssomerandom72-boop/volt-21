@@ -337,9 +337,27 @@ const dealerAvatar = new Avatar('dealer', 0xaa00ff);
 const playerAvatar = new Avatar('player', 0x00ffff);
 
 function updateAvatars(dt) {
-    const p2Bluffing = state && state.p2 && state.p2.isBluffing;
-    dealerAvatar.update(dt, p2Bluffing);
-    playerAvatar.update(dt, false);
+    if (!state || !state.p1 || !state.p2) return;
+    
+    let playerBluffing = false;
+    let oppBluffing = false;
+    
+    if (gameMode === 'online') {
+        if (online.isHost) {
+            playerBluffing = state.p1.isBluffing;
+            oppBluffing = state.p2.isBluffing;
+        } else {
+            playerBluffing = state.p2.isBluffing;
+            oppBluffing = state.p1.isBluffing;
+        }
+    } else {
+        // Local or AI
+        playerBluffing = state.p1.isBluffing;
+        oppBluffing = state.p2.isBluffing;
+    }
+    
+    playerAvatar.update(dt, playerBluffing);
+    dealerAvatar.update(dt, oppBluffing);
 }
 
 // ── SIDE ELECTRODE STANDS + CABLES ──
@@ -1139,6 +1157,7 @@ function resetState() {
             bonusCards: [], name: 'Player 1',
             nextHandRig: null,
             shieldNext: false,
+            isBluffing: false,
         },
         p2: {
             lives: MAX_LIVES, hand: [], roundWins: 0,
@@ -1495,6 +1514,8 @@ async function dealRound() {
     state.p2.hand = dealHand('p2');
     state.p1.claim = null;
     state.p2.claim = null;
+    state.p1.isBluffing = false;
+    state.p2.isBluffing = false;
     playCardFlip();
     await wait(200);
     playCardFlip();
@@ -1841,6 +1862,8 @@ async function resolveRound(r1, r2) {
 
     const loser = winner === 'p1' ? 'p2' : 'p1';
     state[winner].roundWins++;
+    state.p1.isBluffing = false;
+    state.p2.isBluffing = false;
     updateUI();
     if (isBlackjack(state[winner].hand)) {
         await showMessage(`${state[winner].name} hits BLACKJACK! Shock!`, 2000);
@@ -2053,6 +2076,7 @@ function broadcastState() {
             p1lives: state.p1.lives, p2lives: state.p2.lives,
             p1wins: state.p1.roundWins, p2wins: state.p2.roundWins,
             p1bonus: state.p1.bonusCards, p2bonus: state.p2.bonusCards,
+            p1Bluffing: state.p1.isBluffing, p2Bluffing: state.p2.isBluffing,
             round: state.round, tension: state.tension,
         }
     });
@@ -2062,6 +2086,7 @@ function applyNetState(s) {
     state.p1.lives = s.p1lives; state.p2.lives = s.p2lives;
     state.p1.roundWins = s.p1wins; state.p2.roundWins = s.p2wins;
     state.p1.bonusCards = s.p1bonus || []; state.p2.bonusCards = s.p2bonus || [];
+    state.p1.isBluffing = !!s.p1Bluffing; state.p2.isBluffing = !!s.p2Bluffing;
     state.round = s.round; state.tension = s.tension;
     updateUI();
 }
@@ -2121,6 +2146,7 @@ function startGuestTurnUI(hand) {
     document.getElementById('btn-stand').onclick = () => send('stand');
     document.getElementById('btn-fold').onclick  = () => send('fold');
     document.getElementById('btn-bluff').onclick = async () => {
+        state.p2.isBluffing = true;
         ui.actionArea.classList.add('hidden');
         const claim  = await waitForClaim();
         ui.actionArea.classList.add('hidden');
@@ -2168,6 +2194,7 @@ async function onlineHostPlayerTurn() {
             return { result: 'stand', who: 'p1' };
 
         } else if (action === 'bluff') {
+            state.p1.isBluffing = true;
             playBluffSound();
             state.tension = Math.min(100, state.tension + 15);
             const claim = await waitForClaim();
@@ -2333,6 +2360,8 @@ async function onlineResolveRound(r1, r2) {
     const loser  = winner === 'p1' ? 'p2' : 'p1';
     const bjWin  = winner === 'p1' ? bj1 : bj2;
     state[winner].roundWins++;
+    state.p1.isBluffing = false;
+    state.p2.isBluffing = false;
 
     if (bjWin) {
         await showMessage(`${state[winner].name} — BLACKJACK! Shock!`, 2000);
