@@ -1,8 +1,10 @@
 // ═══════════════════════════════════════════════
 //  VOLTAGE 21 — Survival Horror Blackjack
-//  Version: 1.1.3
+//  Version: 1.1.5
 // ═══════════════════════════════════════════════
-console.log('%c[VOLTAGE 21] Version 1.1.3 loaded', 'color:#aa00ff; font-weight:bold; font-size:1.2em;');
+console.log('%c[VOLTAGE 21] Version 1.1.5 loaded', 'color:#aa00ff; font-weight:bold; font-size:1.2em;');
+
+const ID_PREFIX = "VOLT21-";
 
 // ── THREE.JS SCENE SETUP ──
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -1158,6 +1160,10 @@ const online = {
         config: {
             'iceServers': [
                 { 'urls': 'stun:stun.l.google.com:19302' },
+                { 'urls': 'stun:stun1.l.google.com:19302' },
+                { 'urls': 'stun:stun2.l.google.com:19302' },
+                { 'urls': 'stun:stun3.l.google.com:19302' },
+                { 'urls': 'stun:stun4.l.google.com:19302' },
                 { 'urls': 'stun:openrelay.metered.ca:80' },
                 {
                     'urls': 'turn:openrelay.metered.ca:80',
@@ -2538,8 +2544,8 @@ function showLobby() {
             const code = generateCode();
             online.roomCode = code; online.isHost = true;
             try {
-                console.log('Initializing Host Peer with code:', code);
-                online.peer = new Peer(code, online.config);
+                console.log('Initializing Host Peer with code:', ID_PREFIX + code);
+                online.peer = new Peer(ID_PREFIX + code, online.config);
                 
                 online.peer.on('open', (id) => {
                     console.log('Host Peer registered on signaling server. ID:', id);
@@ -2630,9 +2636,9 @@ function showLobby() {
                     
                     // Small delay to ensure host is registered
                     setTimeout(() => {
-                        console.log('Attempting PeerJS connection to ' + code);
-                        const conn = online.peer.connect(code, {
-                            metadata: { version: '1.1.3' }
+                        console.log('Attempting PeerJS connection to ' + ID_PREFIX + code);
+                        const conn = online.peer.connect(ID_PREFIX + code, {
+                            metadata: { version: '1.1.5' }
                         });
                         online.conn = conn;
                         
