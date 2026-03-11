@@ -95,7 +95,9 @@
             </div>
             <div id="center-info" class="hud-panel" style="text-align: center;">
                 <div id="round-display">ROUND 1</div>
-                <div id="win-row" style="font-size: 0.7rem; color: #660099;">P1: 0 | P2: 0</div>
+                <div id="win-row" style="font-size: 0.7rem; color: #660099; display: flex; gap: 6px; align-items: center; letter-spacing: 4px;">
+                    <span id="p1-wins">P1: 0</span><span style="color:#220033">|</span><span id="p2-wins">P2: 0</span>
+                </div>
             </div>
             <div id="p2-panel" class="hud-panel">
                 <div id="p2-name-label">DEALER</div>
@@ -110,10 +112,12 @@
 
         <div id="hand-area" class="hidden" style="position: absolute; bottom: 150px; left: 50%; transform: translateX(-50%); text-align: center;">
             <div id="hand-value" class="hud-panel" style="display: inline-block; font-size: 1.2rem; margin-bottom: 10px;">Total: 0</div>
+            <div id="player-total" class="hidden" style="color: #ff00ff; font-weight: bold;"></div>
         </div>
 
         <div id="opponent-area" class="hidden" style="position: absolute; top: 150px; left: 50%; transform: translateX(-50%); text-align: center;">
             <div id="opp-status" class="hud-panel" style="display: inline-block; font-size: 1rem; color: #ff00ff;">Opponent is thinking...</div>
+            <div id="opp-total" class="hidden" style="color: #ff00ff; font-weight: bold;"></div>
         </div>
 
         <div id="action-area" class="hidden" style="position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: auto;">

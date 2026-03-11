@@ -1023,14 +1023,15 @@ function updateUI() {
     ui.p1Name.textContent = state.p1.name;
     ui.p2Name.textContent = state.p2.name;
     ui.roundDisplay.textContent = `ROUND ${state.round} / ${MAX_ROUNDS}`;
-    ui.tensionBar.style.width = `${Math.min(100, state.tension)}%`;
+    
+    const tensionPct = `${Math.min(100, state.tension)}%`;
+    if (ui.tensionBar) ui.tensionBar.style.height = tensionPct;
+    if (ui.bluffFill) ui.bluffFill.style.height = tensionPct;
 
     const p1Wins = document.getElementById('p1-wins');
     const p2Wins = document.getElementById('p2-wins');
     if (p1Wins) p1Wins.textContent = `${state.p1.name.split(' ')[0]}: ${state.p1.roundWins}`;
     if (p2Wins) p2Wins.textContent = `${state.p2.name.split(' ')[0]}: ${state.p2.roundWins}`;
-
-    ui.bluffFill.style.height = `${Math.min(100, state.tension)}%`;
 
     renderBonusCards('p1');
     renderBonusCards('p2');
