@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════
 //  VOLTAGE 21 — Survival Horror Blackjack
-//  Version: 1.5.1 (MQTT RELAY - SECURE)
+//  Version: 1.5.2 (FULL RESTORE + MQTT SECURE)
 // ═══════════════════════════════════════════════
-console.log('%c[VOLTAGE 21] Version 1.5.1 loaded', 'color:#00ffff; font-weight:bold; font-size:1.4em;');
+console.log('%c[VOLTAGE 21] Version 1.5.2 loaded', 'color:#00ffff; font-weight:bold; font-size:1.4em;');
 
 // ── THREE.JS SCENE SETUP ──
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -207,6 +207,36 @@ function startMusic() {
 }
 
 // ── CARDS ──
+const backTex = (function() {
+    const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 358;
+    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#07000e'; ctx.fillRect(0, 0, 256, 358);
+    ctx.strokeStyle = '#4a0066'; ctx.lineWidth = 5; ctx.strokeRect(7, 7, 242, 344);
+    ctx.fillStyle = '#aa44ff'; ctx.font = 'bold 28px Courier New'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('V-21', 128, 179);
+    return new THREE.CanvasTexture(canvas);
+})();
+
+const faceTexCache = new Map();
+function makeFaceTexture(rank, suit) {
+    const key = rank + suit; if (faceTexCache.has(key)) return faceTexCache.get(key);
+    const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 358;
+    const ctx = canvas.getContext('2d'); const cardColor = (suit === '♥' || suit === '♦') ? '#cc1133' : '#220033';
+    ctx.fillStyle = '#f4edff'; ctx.fillRect(0, 0, 256, 358);
+    ctx.strokeStyle = '#3a0055'; ctx.lineWidth = 5; ctx.strokeRect(5, 5, 246, 348);
+    ctx.fillStyle = cardColor; ctx.font = 'bold 32px Courier New'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(rank, 16, 14); ctx.font = '24px serif'; ctx.fillText(suit, 16, 48);
+    ctx.save(); ctx.translate(240, 344); ctx.rotate(Math.PI); ctx.fillText(rank, 16, 14); ctx.fillText(suit, 16, 48); ctx.restore();
+    ctx.font = '96px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.globalAlpha = 0.85; ctx.fillText(suit, 128, 179);
+    const tex = new THREE.CanvasTexture(canvas); faceTexCache.set(key, tex); return tex;
+}
+
+function makeCardMesh(card, faceDown) {
+    const cardGeo = new THREE.BoxGeometry(0.75, 0.018, 1.05);
+    const edgeMat = new THREE.MeshStandardMaterial({ color:0x180020, emissive:0x180020, emissiveIntensity:0.4 });
+    const topMat = faceDown ? new THREE.MeshStandardMaterial({ map: backTex }) : new THREE.MeshStandardMaterial({ map: makeFaceTexture(card.rank, card.suit) });
+    const materials = [edgeMat, edgeMat, topMat, new THREE.MeshStandardMaterial({ map: backTex }), edgeMat, edgeMat];
+    const mesh = new THREE.Mesh(cardGeo, materials); mesh.castShadow = true; mesh.receiveShadow = true; return mesh;
+}
+
 const SUITS=['♠','♥','♦','♣'], RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
 function makeDeck() {
     const d = SUITS.flatMap(s => RANKS.map(r => ({ suit: s, rank: r })));
@@ -222,20 +252,13 @@ function handTotal(h) {
 // ── STATE ──
 const MAX_LIVES=3, MAX_ROUNDS=5;
 let gameMode='local', state={};
-const online = { 
-    client: null, 
-    topic: '', 
-    clientId: 'user-' + Math.random().toString(36).substr(2, 8),
-    isHost: false, 
-    roomCode: '', 
-    _resolvers: {} 
-};
+const online = { client: null, topic: '', clientId: 'u-'+Math.random().toString(36).substr(2,8), isHost: false, roomCode: '', _resolvers: {} };
 
 function resetState() {
     state = {
         round: 1, deck: makeDeck(), tension: 0, phase: 'deal',
-        p1: { lives: MAX_LIVES, hand: [], roundWins: 0, bonusCards: [], name: 'Player 1', isBluffing: false },
-        p2: { lives: MAX_LIVES, hand: [], roundWins: 0, bonusCards: [], name: 'Player 2', isBluffing: false }
+        p1: { lives: MAX_LIVES, hand: [], roundWins: 0, name: 'Player 1', isBluffing: false },
+        p2: { lives: MAX_LIVES, hand: [], roundWins: 0, name: 'Player 2', isBluffing: false }
     };
     clearCards3D(playerCards3D); clearCards3D(oppCards3D);
 }
@@ -243,62 +266,39 @@ function resetState() {
 // ── NETWORKING (MQTT) ──
 async function initMQTT(code) {
     online.roomCode = code; online.topic = 'volt21/room/' + code;
-    // HiveMQ Public Broker WSS port is 8884
     online.client = new Paho.MQTT.Client('broker.hivemq.com', 8884, online.clientId);
-    
     online.client.onMessageArrived = (msg) => {
-        const data = JSON.parse(msg.payloadString);
-        if (data.sender === online.clientId) return;
+        const data = JSON.parse(msg.payloadString); if (data.sender === online.clientId) return;
         handleNetMessage(data.type, data);
     };
-
     return new Promise((res, rej) => {
-        online.client.connect({
-            onSuccess: () => {
-                online.client.subscribe(online.topic);
-                res();
-            },
-            onFailure: rej,
-            useSSL: true,
-            timeout: 10
-        });
+        online.client.connect({ onSuccess: () => { online.client.subscribe(online.topic); res(); }, onFailure: rej, useSSL: true, timeout: 10 });
     });
 }
-
 function sendNet(type, data = {}) {
     if (!online.client || !online.client.isConnected()) return;
     const msg = new Paho.MQTT.Message(JSON.stringify({ sender: online.clientId, type, ...data }));
-    msg.destinationName = online.topic;
-    online.client.send(msg);
+    msg.destinationName = online.topic; online.client.send(msg);
 }
-
+function broadcastState() {
+    if (!online.isHost) return;
+    sendNet('state', { s: { p1l: state.p1.lives, p2l: state.p2.lives, p1w: state.p1.roundWins, p2w: state.p2.roundWins, r: state.round, t: state.tension, p1h: state.p1.hand, p2h: state.p2.hand } });
+}
+function applyNetState(s) {
+    state.p1.lives = s.p1l; state.p2.lives = s.p2l; state.p1.roundWins = s.p1w; state.p2.roundWins = s.p2w;
+    state.round = s.r; state.tension = s.t; state.p1.hand = s.p1h; state.p2.hand = s.p2h;
+    updateUI(); renderHand(state.p2.hand); renderOppHand(state.p1.hand); // Guest perspective flip
+}
 function handleNetMessage(type, data) {
     if (online.isHost) {
-        if (type === 'guestJoined') {
-            document.getElementById('lobby-status').textContent = 'Guest Connected!';
-            sendNet('hostAck');
-        }
-        if (type === 'action' && online._resolvers.action) {
-            online._resolvers.action(data.val);
-            delete online._resolvers.action;
-        }
+        if (type === 'guestJoined') { document.getElementById('lobby-status').textContent = 'Guest Connected!'; sendNet('hostAck'); }
+        if (type === 'action' && online._resolvers.action) { online._resolvers.action(data.val); delete online._resolvers.action; }
     } else {
         if (type === 'hostAck' && online._resolvers.join) online._resolvers.join();
         if (type === 'state') applyNetState(data.s);
-        if (type === 'yourTurn') startGuestTurnUI(data.hand);
+        if (type === 'message') showMessage(data.text, data.duration);
+        if (type === 'yourTurn') startGuestTurn();
     }
-}
-
-function applyNetState(s) {
-    state.p1.lives = s.p1l; state.p2.lives = s.p2l;
-    state.p1.roundWins = s.p1w; state.p2.roundWins = s.p2w;
-    state.round = s.r; state.tension = s.t;
-    updateUI();
-}
-
-function broadcastState() {
-    if (!online.isHost) return;
-    sendNet('state', { s: { p1l: state.p1.lives, p2l: state.p2.lives, p1w: state.p1.roundWins, p2w: state.p2.roundWins, r: state.round, t: state.tension } });
 }
 
 // ── UI ──
@@ -313,6 +313,7 @@ const ui = {
 const wait = ms => new Promise(r => setTimeout(r, ms));
 async function showMessage(text, duration = 2000) {
     ui.messageBox.textContent = text; ui.messageBox.classList.remove('hidden');
+    if (gameMode==='online' && online.isHost) sendNet('message', { text, duration });
     await wait(duration); ui.messageBox.classList.add('hidden');
 }
 function updateUI() {
@@ -320,31 +321,25 @@ function updateUI() {
     rL(ui.p1Lives, state.p1.lives); rL(ui.p2Lives, state.p2.lives);
     ui.roundDisplay.textContent = `ROUND ${state.round} / ${MAX_ROUNDS}`;
     ui.tensionBar.style.height = `${state.tension}%`;
+    document.getElementById('p1-wins').textContent = `P1: ${state.p1.roundWins}`;
+    document.getElementById('p2-wins').textContent = `P2: ${state.p2.roundWins}`;
 }
 
 // ── RENDER ──
 const PLAYER_Z = 1.9, OPP_Z = -1.9, DECK_POS = new THREE.Vector3(-3.1, 0.065, 0.4);
 let playerCards3D = [], oppCards3D = [], tweens = [];
-
-function makeCardMesh(faceDown) {
-    const cardGeo = new THREE.BoxGeometry(0.75, 0.018, 1.05);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x180020 });
-    const mesh = new THREE.Mesh(cardGeo, Array(6).fill(mat));
-    mesh.castShadow = true; return mesh;
-}
 function clearCards3D(arr) { arr.forEach(m => scene.remove(m)); arr.length = 0; }
 function renderHand(h, all=true) {
-    clearCards3D(playerCards3D);
+    clearCards3D(playerCards3D); const spacing = 0.85, half = (h.length-1)*spacing*0.5;
     h.forEach((c, i) => {
-        const m = makeCardMesh(false); m.position.copy(DECK_POS); m.position.z += i*0.1;
-        m.position.set((i-h.length/2)*0.8, 0.075, PLAYER_Z); scene.add(m); playerCards3D.push(m);
+        const m = makeCardMesh(c, !all && i>0); m.position.set(i*spacing-half, 0.075, PLAYER_Z); scene.add(m); playerCards3D.push(m);
     });
     ui.handValue.textContent = `Total: ${handTotal(h)}`; ui.handArea.classList.remove('hidden');
 }
 function renderOppHand(h, all=false) {
-    clearCards3D(oppCards3D);
+    clearCards3D(oppCards3D); const spacing = 0.85, half = (h.length-1)*spacing*0.5;
     h.forEach((c, i) => {
-        const m = makeCardMesh(true); m.position.set((i-h.length/2)*0.8, 0.075, OPP_Z); scene.add(m); oppCards3D.push(m);
+        const m = makeCardMesh(c, !all); m.rotation.y = Math.PI; m.position.set(i*spacing-half, 0.075, OPP_Z); scene.add(m); oppCards3D.push(m);
     });
     ui.oppArea.classList.remove('hidden');
 }
@@ -353,6 +348,10 @@ function renderOppHand(h, all=false) {
 let _actionResolve = null;
 function waitForAction(who) {
     return new Promise(res => { _actionResolve = res; ui.actionArea.classList.remove('hidden'); ui.actionLabel.textContent = 'YOUR TURN'; });
+}
+function startGuestTurn() {
+    ui.actionArea.classList.remove('hidden'); ui.actionLabel.textContent = 'YOUR TURN';
+    _actionResolve = (val) => { sendNet('action', { val }); ui.actionArea.classList.add('hidden'); };
 }
 
 // ── LOBBY ──
@@ -363,26 +362,22 @@ function showLobby() {
         document.getElementById('mode-local').onclick = () => { gameMode='local'; lobby.classList.add('hidden'); res('local'); };
         document.getElementById('mode-ai').onclick = () => { gameMode='ai'; lobby.classList.add('hidden'); res('ai'); };
         document.getElementById('mode-online').onclick = () => { document.getElementById('lobby-buttons').classList.add('hidden'); setup.classList.remove('hidden'); };
-        
         document.getElementById('create-room-btn').onclick = async () => {
             const code = generateCode(); online.isHost = true;
-            document.getElementById('lobby-status').textContent = 'Connecting to Cloud...';
+            document.getElementById('lobby-status').textContent = 'Connecting...';
             await initMQTT(code);
             document.getElementById('online-options').classList.add('hidden');
             document.getElementById('room-code-display').classList.remove('hidden');
             document.getElementById('room-code-text').textContent = code;
             document.getElementById('lobby-status').textContent = 'Waiting for opponent...';
         };
-
         document.getElementById('join-room-btn').onclick = async () => {
             const code = document.getElementById('join-code-input').value.trim().toUpperCase();
-            online.isHost = false;
-            document.getElementById('lobby-status').textContent = 'Joining room...';
-            await initMQTT(code);
-            sendNet('guestJoined');
+            online.isHost = false; document.getElementById('lobby-status').textContent = 'Joining...';
+            await initMQTT(code); sendNet('guestJoined');
             const joinWait = new Promise((ok, fail) => { online._resolvers.join = ok; setTimeout(fail, 10000); });
             try { await joinWait; gameMode='online'; lobby.classList.add('hidden'); res('online-guest'); }
-            catch(e) { document.getElementById('lobby-status').textContent = 'Room not found.'; }
+            catch(e) { document.getElementById('lobby-status').textContent = 'Host not found.'; }
         };
     });
 }
@@ -396,17 +391,33 @@ async function runOnlineHostGame() {
     while (true) {
         state.p1.hand = [makeDeck().pop(), makeDeck().pop()];
         state.p2.hand = [makeDeck().pop(), makeDeck().pop()];
+        broadcastState(); renderHand(state.p1.hand); renderOppHand(state.p2.hand);
+        await showMessage("Round " + state.round + " Begin!");
+        
+        // Host turn
+        const a1 = await waitForAction('p1');
+        if (a1 === 'hit') { state.p1.hand.push(makeDeck().pop()); renderHand(state.p1.hand); }
         broadcastState();
-        renderHand(state.p1.hand); renderOppHand(state.p2.hand);
-        const action = await waitForAction('p1');
-        if (action === 'hit') { state.p1.hand.push(makeDeck().pop()); broadcastState(); renderHand(state.p1.hand); }
-        await wait(2000); state.round++;
+        
+        // Guest turn
+        await showMessage("Waiting for Opponent...");
+        sendNet('yourTurn');
+        const a2 = await new Promise(res => { online._resolvers.action = res; });
+        if (a2 === 'hit') { state.p2.hand.push(makeDeck().pop()); renderOppHand(state.p2.hand); }
+        
+        // Resolve (simplified for restore test)
+        const t1 = handTotal(state.p1.hand), t2 = handTotal(state.p2.hand);
+        if (t1 > t2 && t1 <= 21) { state.p1.roundWins++; await showMessage("P1 Wins Round!"); }
+        else if (t2 > t1 && t2 <= 21) { state.p2.roundWins++; await showMessage("P2 Wins Round!"); }
+        else { await showMessage("Draw!"); }
+        
+        state.round++; broadcastState(); await wait(3000);
     }
 }
 
 async function startGame() {
     const mode = await showLobby(); startMusic();
-    if (mode === 'local') { resetState(); updateUI(); renderHand([{rank:'A',suit:'♠'}]); }
+    if (mode === 'local') { resetState(); updateUI(); state.p1.hand=[{rank:'A',suit:'♠'}]; renderHand(state.p1.hand); }
     else if (mode === 'online-host') { await runOnlineHostGame(); }
 }
 
