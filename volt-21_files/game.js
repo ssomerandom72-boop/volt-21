@@ -1145,7 +1145,25 @@ function addBloodSplatter() {
 const MAX_LIVES  = 3;
 const MAX_ROUNDS = 5;
 let gameMode = 'local';
-const online = { peer: null, conn: null, isHost: false, roomCode: '', _resolvers: {} };
+const online = { 
+    peer: null, 
+    conn: null, 
+    isHost: false, 
+    roomCode: '', 
+    _resolvers: {},
+    config: {
+        debug: 2,
+        config: {
+            'iceServers': [
+                { 'urls': 'stun:stun.l.google.com:19302' },
+                { 'urls': 'stun:stun1.l.google.com:19302' },
+                { 'urls': 'stun:stun2.l.google.com:19302' },
+                { 'urls': 'stun:stun3.l.google.com:19302' },
+                { 'urls': 'stun:stun4.l.google.com:19302' },
+            ]
+        }
+    }
+};
 let state = {};
 
 function resetState() {
@@ -1447,15 +1465,6 @@ function renderOppHand(hand, showAll = false, statusText = '') {
 }
 
 // ── SHOCK ──
-// ── AUDIO ──
-function startMusic() {
-    if (bgMusic) return; // Already playing
-    bgMusic = new Audio('1Askim Cok Pardon (Instrumental Slowed).mp3');
-    bgMusic.loop = true;
-    bgMusic.volume = 0.4;
-    bgMusic.play().catch(e => console.log("Music autoplay blocked, will play on next interaction"));
-}
-
 async function doShock(who, isDouble = false) {
     initAudio();
     const lives = isDouble ? 2 : 1;
@@ -2515,7 +2524,7 @@ function showLobby() {
             try {
                 console.log('Initializing Peer with code:', code);
                 // Use default PeerJS cloud server
-                online.peer = new Peer(code);
+                online.peer = new Peer(code, online.config);
                 
                 online.peer.on('open', (id) => {
                     console.log('Peer server connection open. ID:', id);
@@ -2564,12 +2573,12 @@ function showLobby() {
             online.isHost = false;
             try {
                 console.log('Initializing Guest Peer...');
-                online.peer = new Peer();
+                online.peer = new Peer(online.config);
                 
                 online.peer.on('open', (id) => {
                     console.log('Guest Peer ID:', id);
                     console.log('Attempting to connect to host:', code);
-                    const conn = online.peer.connect(code, { reliable: true });
+                    const conn = online.peer.connect(code);
                     online.conn = conn;
                     
                     conn.on('open', () => {
