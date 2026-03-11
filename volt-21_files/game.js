@@ -1425,7 +1425,7 @@ function startMusic() {
 
 async function doShock(who, isDouble = false) {
     initAudio();
-    const lives = double ? 2 : 1;
+    const lives = isDouble ? 2 : 1;
 
     if (state[who].shieldNext) {
         state[who].shieldNext = false;
@@ -1436,20 +1436,20 @@ async function doShock(who, isDouble = false) {
         return;
     }
 
-    double ? playBigShock() : playShock();
-    setTimeout(() => playGrunt(double), 80);
+    isDouble ? playBigShock() : playShock();
+    setTimeout(() => playGrunt(isDouble), 80);
     ui.shockOverlay.classList.remove('shocking');
     void ui.shockOverlay.offsetWidth;
     ui.shockOverlay.classList.add('shocking');
 
     // 3D shock effects
-    triggerShock3D(who, double);
+    triggerShock3D(who, isDouble);
 
     const panel = document.getElementById(`${who}-panel`);
-    panel.style.boxShadow = double
+    panel.style.boxShadow = isDouble
         ? '0 0 60px rgba(80,200,255,1), 0 0 100px rgba(255,255,255,0.5)'
         : '0 0 40px rgba(80,200,255,0.9)';
-    await wait(double ? 500 : 300);
+    await wait(isDouble ? 500 : 300);
     panel.style.boxShadow = '';
 
     state[who].lives = Math.max(0, state[who].lives - lives);
@@ -1739,8 +1739,17 @@ async function resolveRound(r1, r2) {
 
     if (declaredWinner) {
         const declaredLoser = declaredWinner === 'p1' ? 'p2' : 'p1';
-        const winnerDeclLabel = declaredWinner === 'p1' ? p1Label : p2Label;
-        const choice = await waitForShowdownChallenge(declaredLoser, winnerDeclLabel);
+        const winnerDeclName = state[declaredWinner].name;
+        
+        let choice = 'accept';
+        if (gameMode === 'ai' && declaredLoser === 'p2') {
+            // AI logic: Challenge if player has low lives or high tension
+            await showMessage(`${state.p2.name} is considering...`, 1000);
+            const challengeChance = 0.3 * state.p2.aggression + (state.p1.lives === 1 ? 0.4 : 0);
+            choice = Math.random() < challengeChance ? 'call' : 'accept';
+        } else {
+            choice = await waitForShowdownChallenge(declaredLoser, winnerDeclName);
+        }
 
         if (choice === 'accept') {
             // Loser accepts — winner takes round + bonus, no shock
