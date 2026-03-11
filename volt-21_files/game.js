@@ -1152,24 +1152,23 @@ const online = {
     roomCode: '', 
     _resolvers: {},
     config: {
-        host: '0.peerjs.com',
-        port: 443,
-        secure: true,
-        debug: 2,
+        debug: 3,
         config: {
             'iceServers': [
                 { 'urls': 'stun:stun.l.google.com:19302' },
-                { 'urls': 'stun:stun1.l.google.com:19302' },
-                { 'urls': 'stun:stun2.l.google.com:19302' },
-                { 'urls': 'stun:stun.services.mozilla.com' },
-                // Adding a public TURN server for better NAT traversal
+                { 'urls': 'stun:openrelay.metered.ca:80' },
                 {
-                    'urls': 'turn:relay.metered.ca:443',
+                    'urls': 'turn:openrelay.metered.ca:80',
                     'username': 'openrelayproject',
                     'credential': 'openrelayproject'
                 },
                 {
-                    'urls': 'turn:relay.metered.ca:80',
+                    'urls': 'turn:openrelay.metered.ca:443',
+                    'username': 'openrelayproject',
+                    'credential': 'openrelayproject'
+                },
+                {
+                    'urls': 'turn:openrelay.metered.ca:443?transport=tcp',
                     'username': 'openrelayproject',
                     'credential': 'openrelayproject'
                 }
