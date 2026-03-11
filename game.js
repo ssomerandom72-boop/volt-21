@@ -1922,14 +1922,23 @@ function showLobby() {
         const roomDisplay = document.getElementById('room-code-display');
 
         document.getElementById('mode-local').onclick = () => {
+            console.log('Local mode clicked');
             gameMode = 'local'; lobby.classList.add('hidden'); resolve('local');
         };
 
-        document.getElementById('mode-story').onclick = () => {
-            gameMode = 'story'; lobby.classList.add('hidden'); resolve('story');
-        };
+        const storyBtn = document.getElementById('mode-story');
+        if (storyBtn) {
+            console.log('Story button found');
+            storyBtn.onclick = () => {
+                console.log('Story mode clicked');
+                gameMode = 'story'; lobby.classList.add('hidden'); resolve('story');
+            };
+        } else {
+            console.error('Story button NOT found');
+        }
 
         document.getElementById('mode-online').onclick = () => {
+            console.log('Online mode clicked');
             lobbyBtns.classList.add('hidden'); onlineSetup.classList.remove('hidden');
         };
 
