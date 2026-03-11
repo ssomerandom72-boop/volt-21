@@ -1152,6 +1152,9 @@ const online = {
     roomCode: '', 
     _resolvers: {},
     config: {
+        host: '0.peerjs.com',
+        port: 443,
+        secure: true,
         debug: 2,
         config: {
             'iceServers': [
