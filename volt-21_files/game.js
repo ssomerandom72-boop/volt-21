@@ -1152,15 +1152,18 @@ const online = {
     roomCode: '', 
     _resolvers: {},
     config: {
-        debug: 2,
+        debug: 3, // Increased debug level for more detail
+        host: '0.peerjs.com',
+        port: 443,
+        secure: true,
+        pingInterval: 5000,
         config: {
             'iceServers': [
                 { 'urls': 'stun:stun.l.google.com:19302' },
                 { 'urls': 'stun:stun1.l.google.com:19302' },
                 { 'urls': 'stun:stun2.l.google.com:19302' },
-                { 'urls': 'stun:stun3.l.google.com:19302' },
-                { 'urls': 'stun:stun4.l.google.com:19302' },
-            ]
+            ],
+            'iceCandidatePoolSize': 10
         }
     }
 };
@@ -2520,11 +2523,6 @@ function showLobby() {
             btn.disabled = true;
             document.getElementById('lobby-status').textContent = 'Generating ID...';
 
-            if (typeof Peer === 'undefined') {
-                document.getElementById('lobby-status').textContent = 'Network library not loaded. Refreshing...';
-                setTimeout(() => window.location.reload(), 2000);
-                return;
-            }
             const code = generateCode();
             online.roomCode = code; online.isHost = true;
             try {
@@ -2532,7 +2530,7 @@ function showLobby() {
                 online.peer = new Peer(code, online.config);
                 
                 online.peer.on('open', (id) => {
-                    console.log('Host Peer open. ID:', id);
+                    console.log('Host Peer registered on signaling server. ID:', id);
                     onlineOpts.classList.add('hidden'); roomDisplay.classList.remove('hidden');
                     document.getElementById('room-code-text').textContent = code;
                     document.getElementById('lobby-status').textContent = 'Waiting for opponent...';
@@ -2540,40 +2538,44 @@ function showLobby() {
                 });
 
                 online.peer.on('connection', conn => {
-                    console.log('Incoming connection attempt...');
+                    console.log('Incoming connection detected from guest...');
                     online.conn = conn;
                     
                     const timeout = setTimeout(() => {
                         if (conn.open) return;
-                        console.error('Incoming connection handshake timed out');
-                        document.getElementById('lobby-status').textContent = 'Handshake timeout. Try again.';
-                    }, 10000);
+                        console.error('Handshake with guest failed (timeout)');
+                        document.getElementById('lobby-status').textContent = 'Connection handshake timeout. Try again.';
+                    }, 15000);
 
                     conn.on('open', () => {
                         clearTimeout(timeout);
-                        console.log('Data connection established with guest');
-                        document.getElementById('lobby-status').textContent = 'Connected!';
+                        console.log('Data connection established with guest!');
+                        document.getElementById('lobby-status').textContent = 'CONNECTED!';
                         gameMode = 'online';
                         conn.on('data', handleGuestMessage);
                         setTimeout(() => { lobby.classList.add('hidden'); resolve('online-host'); }, 700);
                     });
+
                     conn.on('error', err => {
-                        console.error('Host side connection error:', err);
+                        clearTimeout(timeout);
+                        console.error('Connection error (host side):', err);
                         document.getElementById('lobby-status').textContent = 'Connection error: ' + err.type;
                     });
                 });
 
                 online.peer.on('error', err => {
                     btn.disabled = false;
-                    console.error('Host Peer error:', err);
-                    document.getElementById('lobby-status').textContent = 'Error: ' + err.type;
-                    if (err.type === 'unavailable-id') {
-                        document.getElementById('lobby-status').textContent = 'Code taken. Try again.';
-                    }
+                    console.error('Peer Server Error (Host):', err);
+                    document.getElementById('lobby-status').textContent = 'Server error: ' + err.type;
+                });
+
+                online.peer.on('disconnected', () => {
+                    console.warn('Host disconnected from signaling server. Reconnecting...');
+                    online.peer.reconnect();
                 });
             } catch (e) {
                 btn.disabled = false;
-                console.error('Host Peer creation failed:', e);
+                console.error('Fatal Host Error:', e);
             }
         });
 
@@ -2586,39 +2588,36 @@ function showLobby() {
             if (!code) return;
 
             btn.disabled = true;
-            document.getElementById('lobby-status').textContent = 'Connecting to signaling server...';
+            document.getElementById('lobby-status').textContent = 'Connecting to network...';
             
-            if (typeof Peer === 'undefined') {
-                document.getElementById('lobby-status').textContent = 'Network library not loaded. Refreshing...';
-                setTimeout(() => window.location.reload(), 2000);
-                return;
-            }
-
             online.isHost = false;
             try {
                 console.log('Initializing Guest Peer...');
                 online.peer = new Peer(online.config);
                 
                 online.peer.on('open', (id) => {
-                    console.log('Guest Peer open. ID:', id);
-                    document.getElementById('lobby-status').textContent = 'Searching for host: ' + code;
+                    console.log('Guest Peer ID:', id);
+                    document.getElementById('lobby-status').textContent = 'Connecting to room: ' + code;
                     
+                    console.log('Attempting PeerJS connection to ' + code);
                     const conn = online.peer.connect(code, {
-                        metadata: { version: '1.0.9' }
+                        metadata: { version: '1.0.9' },
+                        serialization: 'json'
                     });
                     online.conn = conn;
                     
                     const timeout = setTimeout(() => {
                         if (conn.open) return;
-                        console.error('Connection handshake timed out');
-                        document.getElementById('lobby-status').textContent = 'Could not find host or connection timed out.';
+                        console.error('Handshake with host failed (timeout)');
+                        document.getElementById('lobby-status').textContent = 'Room not found or connection stalled.';
                         btn.disabled = false;
-                    }, 12000);
+                        if (online.peer) online.peer.destroy();
+                    }, 15000);
                     
                     conn.on('open', () => {
                         clearTimeout(timeout);
-                        console.log('Connection to host established!');
-                        document.getElementById('lobby-status').textContent = 'Connected!';
+                        console.log('Data connection established with host!');
+                        document.getElementById('lobby-status').textContent = 'CONNECTED!';
                         gameMode = 'online';
                         conn.on('data', handleHostMessage);
                         setTimeout(() => { lobby.classList.add('hidden'); resolve('online-guest'); }, 700);
@@ -2627,19 +2626,24 @@ function showLobby() {
                     conn.on('error', err => {
                         clearTimeout(timeout);
                         btn.disabled = false;
-                        console.error('Guest connection error:', err);
+                        console.error('Connection error (guest side):', err);
                         document.getElementById('lobby-status').textContent = 'Connect failed: ' + err.type;
                     });
                 });
 
                 online.peer.on('error', err => {
                     btn.disabled = false;
-                    console.error('Guest Peer Server error:', err);
-                    document.getElementById('lobby-status').textContent = 'Network error: ' + err.type;
+                    console.error('Peer Server Error (Guest):', err);
+                    document.getElementById('lobby-status').textContent = 'Server error: ' + err.type;
+                });
+
+                online.peer.on('disconnected', () => {
+                    console.warn('Guest disconnected from signaling server. Reconnecting...');
+                    online.peer.reconnect();
                 });
             } catch (e) {
                 btn.disabled = false;
-                console.error('Guest Peer creation failed:', e);
+                console.error('Fatal Guest Error:', e);
             }
         });
     });
