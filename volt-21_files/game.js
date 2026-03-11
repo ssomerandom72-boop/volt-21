@@ -1152,16 +1152,16 @@ const online = {
     roomCode: '', 
     _resolvers: {},
     config: {
-        debug: 3, // Increased debug level for more detail
-        host: '0.peerjs.com',
-        port: 443,
-        secure: true,
-        pingInterval: 5000,
+        debug: 2,
         config: {
             'iceServers': [
                 { 'urls': 'stun:stun.l.google.com:19302' },
                 { 'urls': 'stun:stun1.l.google.com:19302' },
                 { 'urls': 'stun:stun2.l.google.com:19302' },
+                { 'urls': 'stun:stun3.l.google.com:19302' },
+                { 'urls': 'stun:stun4.l.google.com:19302' },
+                { 'urls': 'stun:stun.services.mozilla.com' },
+                { 'urls': 'stun:stun.relay.metered.ca:80' }
             ],
             'iceCandidatePoolSize': 10
         }
@@ -2544,8 +2544,8 @@ function showLobby() {
                     const timeout = setTimeout(() => {
                         if (conn.open) return;
                         console.error('Handshake with guest failed (timeout)');
-                        document.getElementById('lobby-status').textContent = 'Connection handshake timeout. Try again.';
-                    }, 15000);
+                        document.getElementById('lobby-status').textContent = 'Handshake stalled. Check for strict NAT.';
+                    }, 20000);
 
                     conn.on('open', () => {
                         clearTimeout(timeout);
@@ -2599,36 +2599,37 @@ function showLobby() {
                     console.log('Guest Peer ID:', id);
                     document.getElementById('lobby-status').textContent = 'Connecting to room: ' + code;
                     
-                    console.log('Attempting PeerJS connection to ' + code);
-                    const conn = online.peer.connect(code, {
-                        metadata: { version: '1.0.9' },
-                        serialization: 'json'
-                    });
-                    online.conn = conn;
-                    
-                    const timeout = setTimeout(() => {
-                        if (conn.open) return;
-                        console.error('Handshake with host failed (timeout)');
-                        document.getElementById('lobby-status').textContent = 'Room not found or connection stalled.';
-                        btn.disabled = false;
-                        if (online.peer) online.peer.destroy();
-                    }, 15000);
-                    
-                    conn.on('open', () => {
-                        clearTimeout(timeout);
-                        console.log('Data connection established with host!');
-                        document.getElementById('lobby-status').textContent = 'CONNECTED!';
-                        gameMode = 'online';
-                        conn.on('data', handleHostMessage);
-                        setTimeout(() => { lobby.classList.add('hidden'); resolve('online-guest'); }, 700);
-                    });
-                    
-                    conn.on('error', err => {
-                        clearTimeout(timeout);
-                        btn.disabled = false;
-                        console.error('Connection error (guest side):', err);
-                        document.getElementById('lobby-status').textContent = 'Connect failed: ' + err.type;
-                    });
+                    // Small delay to ensure host is registered
+                    setTimeout(() => {
+                        console.log('Attempting PeerJS connection to ' + code);
+                        const conn = online.peer.connect(code, {
+                            metadata: { version: '1.0.9' }
+                        });
+                        online.conn = conn;
+                        
+                        const timeout = setTimeout(() => {
+                            if (conn.open) return;
+                            console.error('Handshake with host failed (timeout)');
+                            document.getElementById('lobby-status').textContent = 'Handshake stalled. Host might be blocked.';
+                            btn.disabled = false;
+                        }, 20000);
+                        
+                        conn.on('open', () => {
+                            clearTimeout(timeout);
+                            console.log('Data connection established with host!');
+                            document.getElementById('lobby-status').textContent = 'CONNECTED!';
+                            gameMode = 'online';
+                            conn.on('data', handleHostMessage);
+                            setTimeout(() => { lobby.classList.add('hidden'); resolve('online-guest'); }, 700);
+                        });
+                        
+                        conn.on('error', err => {
+                            clearTimeout(timeout);
+                            btn.disabled = false;
+                            console.error('Connection error (guest side):', err);
+                            document.getElementById('lobby-status').textContent = 'Connect failed: ' + err.type;
+                        });
+                    }, 300);
                 });
 
                 online.peer.on('error', err => {
