@@ -2505,6 +2505,11 @@ function showLobby() {
 
         wireBtn('create-room-btn', () => {
             console.log('Create room clicked');
+            if (typeof Peer === 'undefined') {
+                document.getElementById('lobby-status').textContent = 'Network library not loaded. Refreshing...';
+                setTimeout(() => window.location.reload(), 2000);
+                return;
+            }
             const code = generateCode();
             online.roomCode = code; online.isHost = true;
             try {
@@ -2549,6 +2554,11 @@ function showLobby() {
 
         wireBtn('join-room-btn', () => {
             console.log('Join room clicked');
+            if (typeof Peer === 'undefined') {
+                document.getElementById('lobby-status').textContent = 'Network library not loaded. Refreshing...';
+                setTimeout(() => window.location.reload(), 2000);
+                return;
+            }
             const code = document.getElementById('join-code-input').value.trim().toUpperCase();
             if (!code) return;
             online.isHost = false;
